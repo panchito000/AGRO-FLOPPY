@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Zafra AI — Copiloto Agronómico</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+</head>
+<body>
+  <header class="header">
+    <div class="container header__inner">
+      <a href="/" class="logo">
+        <img src="assets/logo.svg" alt="Zafra AI" class="logo__icon" width="32" height="32">
+        <span class="logo__text">Zafra AI</span>
+      </a>
+      <p class="header__tagline">Copiloto inteligente para soya y maíz</p>
+    </div>
+  </header>
+
+  <main class="main">
+    <div class="container">
+      <section class="hero">
+        <h1 class="hero__title">Toma de decisiones agronómicas</h1>
+        <p class="hero__subtitle">
+          Analiza condiciones, evalúa escenarios y obtén recomendaciones fundamentadas.
+          Zafra AI complementa el criterio del ingeniero agrónomo.
+        </p>
+      </section>
+
+      <div class="grid">
+        <section class="card card--form">
+          <h2 class="card__title">Nueva evaluación</h2>
+          <form id="evaluacion-form" class="form" novalidate>
+            <div class="form__group">
+              <label for="cultivo" class="form__label">Cultivo</label>
+              <select id="cultivo" name="cultivo" class="form__input" required>
+                <option value="" disabled selected>Seleccionar cultivo</option>
+                <option value="soya">Soya</option>
+                <option value="maiz">Maíz</option>
+              </select>
+            </div>
+
+            <div class="form__group">
+              <label for="tipo_evaluacion" class="form__label">Tipo de evaluación</label>
+              <select id="tipo_evaluacion" name="tipo_evaluacion" class="form__input" required>
+                <option value="" disabled selected>Seleccionar tipo</option>
+                <option value="siembra">Siembra</option>
+                <option value="fertilizacion">Fertilización</option>
+                <option value="riego">Riego</option>
+                <option value="plagas">Plagas</option>
+                <option value="cosecha">Cosecha</option>
+              </select>
+            </div>
+
+            <div class="form__group">
+              <label for="ubicacion" class="form__label">Ubicación</label>
+              <input
+                type="text"
+                id="ubicacion"
+                name="ubicacion"
+                class="form__input"
+                placeholder="Ej: Pergamino, Buenos Aires"
+                required
+                minlength="2"
+                maxlength="255"
+              >
+            </div>
+
+            <div class="form__group">
+              <label for="texto" class="form__label">Notas (texto)</label>
+              <textarea
+                id="texto"
+                name="texto"
+                class="form__input form__textarea"
+                placeholder="Describí el lote, síntomas, dudas o contexto de la evaluación..."
+                rows="4"
+                maxlength="5000"
+              ></textarea>
+              <p class="form__hint">Podés escribir notas, subir audio o enviar ambos.</p>
+            </div>
+
+            <div class="form__group">
+              <span class="form__label">Nota de voz (audio)</span>
+              <div class="audio-panel">
+                <div class="audio-panel__controls">
+                  <button type="button" class="btn btn--secondary" id="btn-grabar">
+                    Grabar
+                  </button>
+                  <button type="button" class="btn btn--secondary" id="btn-detener" disabled>
+                    Detener
+                  </button>
+                  <button type="button" class="btn btn--ghost" id="btn-limpiar-audio" disabled>
+                    Limpiar
+                  </button>
+                </div>
+                <label class="audio-panel__upload">
+                  <span>O subir un archivo</span>
+                  <input
+                    type="file"
+                    id="audio-file"
+                    name="audio"
+                    accept="audio/*"
+                    hidden
+                  >
+                </label>
+                <p class="audio-panel__status" id="audio-status">Sin audio seleccionado.</p>
+                <audio id="audio-preview" controls hidden></audio>
+              </div>
+            </div>
+
+            <button type="submit" class="btn btn--primary" id="btn-analizar">
+              <span class="btn__text">Analizar</span>
+              <span class="btn__loader" hidden></span>
+            </button>
+          </form>
+        </section>
+
+        <section class="results" id="resultados">
+          <div class="card card--result" id="card-clima">
+            <div class="card__header">
+              <span class="card__icon card__icon--clima" aria-hidden="true">☁</span>
+              <h2 class="card__title">Clima</h2>
+            </div>
+            <p class="card__placeholder">Los datos meteorológicos aparecerán aquí.</p>
+            <div class="card__content" id="clima-content" hidden></div>
+          </div>
+
+          <div class="card card--result" id="card-recomendacion">
+            <div class="card__header">
+              <span class="card__icon card__icon--recomendacion" aria-hidden="true">✦</span>
+              <h2 class="card__title">Recomendación</h2>
+            </div>
+            <p class="card__placeholder">La recomendación agronómica aparecerá aquí.</p>
+            <div class="card__content" id="recomendacion-content" hidden></div>
+          </div>
+
+          <div class="card card--result" id="card-explicacion">
+            <div class="card__header">
+              <span class="card__icon card__icon--explicacion" aria-hidden="true">≡</span>
+              <h2 class="card__title">Explicación</h2>
+            </div>
+            <p class="card__placeholder">El razonamiento detrás de la recomendación aparecerá aquí.</p>
+            <div class="card__content" id="explicacion-content" hidden></div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <p>Zafra AI v0.1 — Hackathon base</p>
+    </div>
+  </footer>
+
+  <div id="toast" class="toast" role="alert" aria-live="polite" hidden></div>
+
+  <script src="js/app.js"></script>
+</body>
+</html>
