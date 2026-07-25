@@ -1,10 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "redirects": [
+    { "source": "/", "destination": "/index.html", "permanent": false }
+  ],
   "rewrites": [
     { "source": "/api/:path*", "destination": "/api/index.py" },
-    { "source": "/api", "destination": "/api/index.py" },
-    { "source": "/", "destination": "/index.html" },
-    { "source": "/((?!api/)(?!css/)(?!js/)(?!assets/).*)", "destination": "/index.html" }
+    { "source": "/api", "destination": "/api/index.py" }
   ],
   "env": {
     "APP_ENV": "production",
