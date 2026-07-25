@@ -1,0 +1,7 @@
+.cursor/
+.git/
+backend/uploads/
+**/__pycache__/
+**/.venv/
+**/.env
+*.pyc

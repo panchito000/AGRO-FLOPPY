@@ -1,5 +1,6 @@
 """Configuración de la aplicación."""
 
+import os
 from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -19,11 +20,31 @@ class Settings(BaseSettings):
 
     database_url: str = "postgresql://usuario:password@localhost:5432/zafra_ai"
     app_env: str = "development"
-    cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500"
+    cors_origins: str = "http://localhost:5500,http://127.0.0.1:5500,http://localhost:8000"
+    root_path: str = ""
+    uploads_dir: str = ""
 
     @property
     def cors_origins_list(self) -> list[str]:
-        return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
+
+        vercel_url = os.getenv("VERCEL_URL")
+        if vercel_url:
+            origins.extend([f"https://{vercel_url}", f"https://www.{vercel_url}"])
+
+        vercel_branch_url = os.getenv("VERCEL_BRANCH_URL")
+        if vercel_branch_url:
+            origins.append(f"https://{vercel_branch_url}")
+
+        return list(dict.fromkeys(origins))
+
+    @property
+    def uploads_path(self) -> Path:
+        if self.uploads_dir:
+            return Path(self.uploads_dir)
+        if os.getenv("VERCEL"):
+            return Path("/tmp/agro-floppy/uploads/audio")
+        return BACKEND_DIR / "uploads" / "audio"
 
 
 settings = Settings()

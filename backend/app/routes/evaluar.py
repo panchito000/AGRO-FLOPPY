@@ -13,6 +13,8 @@ async def evaluar(
     cultivo: CultivoEnum = Form(...),
     tipo_evaluacion: TipoEvaluacionEnum = Form(...),
     ubicacion: str = Form(..., min_length=2, max_length=255),
+    latitud: float | None = Form(default=None),
+    longitud: float | None = Form(default=None),
     texto: str | None = Form(default=None, max_length=5000),
     audio: UploadFile | None = File(default=None),
 ):
@@ -25,10 +27,18 @@ async def evaluar(
             detail="Incluí al menos una nota de texto o un archivo de audio.",
         )
 
+    if latitud is None or longitud is None:
+        raise HTTPException(
+            status_code=422,
+            detail="Seleccioná la ubicación en el mapa antes de enviar.",
+        )
+
     datos = EvaluacionRequest(
         cultivo=cultivo,
         tipo_evaluacion=tipo_evaluacion,
         ubicacion=ubicacion.strip(),
+        latitud=latitud,
+        longitud=longitud,
         texto=texto_limpio,
     )
 

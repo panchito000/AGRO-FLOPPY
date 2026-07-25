@@ -5,9 +5,10 @@ from pathlib import Path
 
 from fastapi import UploadFile
 
+from app.config import settings
 from app.models.schemas import EvaluacionRequest, EvaluacionResponse
 
-UPLOADS_DIR = Path(__file__).resolve().parents[2] / "uploads" / "audio"
+UPLOADS_DIR = settings.uploads_path
 ALLOWED_AUDIO_TYPES = {
     "audio/webm",
     "audio/ogg",
@@ -67,6 +68,8 @@ def procesar_evaluacion(
         cultivo=datos.cultivo.value,
         tipo_evaluacion=datos.tipo_evaluacion.value,
         ubicacion=datos.ubicacion,
+        latitud=datos.latitud,
+        longitud=datos.longitud,
         texto=texto,
         audio_recibido=audio_recibido,
         audio_nombre=audio_nombre,

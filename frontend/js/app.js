@@ -3,7 +3,7 @@
  * Conecta el formulario con la API FastAPI (texto + audio).
  */
 
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = APP_CONFIG.apiBaseUrl;
 
 const form = document.getElementById("evaluacion-form");
 const btnAnalizar = document.getElementById("btn-analizar");
@@ -177,10 +177,15 @@ function showPlaceholderResults(data) {
     ? `<p><strong>Audio:</strong> ${data.audio_nombre} (${formatBytes(data.audio_tamano_bytes)})</p>`
     : `<p><strong>Audio:</strong> <em>No enviado</em></p>`;
 
+  const coordsHtml = data.latitud != null && data.longitud != null
+    ? `<p><strong>Coordenadas:</strong> ${data.latitud.toFixed(6)}, ${data.longitud.toFixed(6)}</p>`
+    : "";
+
   resultContents.recomendacion.innerHTML = `
     <p><strong>Cultivo:</strong> ${formatCultivo(data.cultivo)}</p>
     <p><strong>Evaluación:</strong> ${formatTipo(data.tipo_evaluacion)}</p>
     <p><strong>Ubicación:</strong> ${data.ubicacion}</p>
+    ${coordsHtml}
     ${textoHtml}
     ${audioHtml}
     <p style="margin-top:0.75rem;color:var(--color-gray-500)">${data.mensaje}</p>
@@ -231,6 +236,14 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const latitud = document.getElementById("latitud")?.value;
+  const longitud = document.getElementById("longitud")?.value;
+
+  if (!latitud || !longitud) {
+    showToast("Seleccioná la ubicación en el mapa antes de analizar.", true);
+    return;
+  }
+
   if (!hasTextoOAudio()) {
     showToast("Agregá una nota de texto o un audio antes de analizar.", true);
     return;
@@ -240,6 +253,8 @@ form.addEventListener("submit", async (event) => {
   formData.append("cultivo", form.cultivo.value);
   formData.append("tipo_evaluacion", form.tipo_evaluacion.value);
   formData.append("ubicacion", form.ubicacion.value.trim());
+  formData.append("latitud", latitud);
+  formData.append("longitud", longitud);
 
   const texto = textoInput.value.trim();
   if (texto) {

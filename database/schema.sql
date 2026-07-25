@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS evaluaciones (
     cultivo_id      INTEGER NOT NULL REFERENCES cultivos(id) ON DELETE RESTRICT,
     tipo_evaluacion VARCHAR(80) NOT NULL,
     ubicacion       VARCHAR(255) NOT NULL,
+    latitud         DOUBLE PRECISION,
+    longitud        DOUBLE PRECISION,
     resultado       TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

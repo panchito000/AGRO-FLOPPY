@@ -22,6 +22,8 @@ class EvaluacionRequest(BaseModel):
     cultivo: CultivoEnum
     tipo_evaluacion: TipoEvaluacionEnum
     ubicacion: str = Field(..., min_length=2, max_length=255)
+    latitud: float | None = Field(default=None, ge=-90, le=90)
+    longitud: float | None = Field(default=None, ge=-180, le=180)
     texto: str | None = Field(default=None, max_length=5000)
 
 
@@ -29,6 +31,8 @@ class EvaluacionResponse(BaseModel):
     cultivo: str
     tipo_evaluacion: str
     ubicacion: str
+    latitud: float | None = None
+    longitud: float | None = None
     texto: str | None = None
     audio_recibido: bool = False
     audio_nombre: str | None = None

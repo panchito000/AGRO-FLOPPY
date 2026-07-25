@@ -6,9 +6,12 @@ Copiloto inteligente para ingenieros agrónomos, administradores agrícolas y pr
 
 ```
 AGRO-FLOPPY/
+├── api/               # Entry point serverless (Vercel)
 ├── frontend/          # HTML, CSS, JavaScript vanilla
 ├── backend/           # API FastAPI
 ├── database/          # Esquema SQL
+├── vercel.json        # Configuración de despliegue
+├── requirements.txt   # Dependencias Python (Vercel)
 └── docs/              # Documentación agronómica
 ```
 
@@ -59,12 +62,64 @@ API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ## Endpoints
 
-| Método | Ruta       | Descripción                    |
-|--------|------------|--------------------------------|
-| GET    | `/`        | Health check de la API         |
-| POST   | `/evaluar` | Recibe datos del formulario    |
+| Método | Ruta (local)   | Ruta (Vercel)      | Descripción                 |
+|--------|----------------|--------------------|-----------------------------|
+| GET    | `/`            | `/api/`            | Health check de la API      |
+| POST   | `/evaluar`     | `/api/evaluar`     | Recibe datos del formulario |
+| GET    | `/docs`        | `/api/docs`        | Documentación Swagger       |
 
-## Estado actual (v0.1)
+---
+
+## Despliegue en Vercel
+
+El proyecto está configurado para desplegarse en **un solo proyecto Vercel**:
+
+- **Frontend** → carpeta `frontend/` (sitio estático)
+- **Backend** → `api/index.py` (FastAPI serverless bajo `/api`)
+
+### Paso 1 — Subir a GitHub
+
+```bash
+git add .
+git commit -m "Configurar despliegue en Vercel"
+git push origin main
+```
+
+### Paso 2 — Importar en Vercel
+
+1. Entrá a [vercel.com/new](https://vercel.com/new)
+2. Importá el repositorio **AGRO-FLOPPY** desde GitHub
+3. Vercel detectará `vercel.json` automáticamente
+4. **No cambies** el Output Directory (ya está en `frontend`)
+5. Clic en **Deploy**
+
+### Paso 3 — Variables de entorno en Vercel
+
+En **Project → Settings → Environment Variables**, agregá:
+
+| Variable | Valor | Entorno |
+|----------|-------|---------|
+| `DATABASE_URL` | URL de PostgreSQL/Supabase | Production |
+| `SUPABASE_URL` | `https://xxx.supabase.co` | Production |
+| `SUPABASE_KEY` | Clave anon de Supabase | Production |
+| `ROOT_PATH` | `/api` | Production |
+| `APP_ENV` | `production` | Production |
+
+> `ROOT_PATH` y `APP_ENV` ya están en `vercel.json`, pero conviene repetirlos en el dashboard.
+
+### Paso 4 — Verificar
+
+- Frontend: `https://tu-proyecto.vercel.app`
+- API health: `https://tu-proyecto.vercel.app/api/`
+- Swagger: `https://tu-proyecto.vercel.app/api/docs`
+
+### Notas importantes
+
+- El frontend detecta automáticamente si está en local (`localhost:8000`) o en Vercel (`/api`).
+- Los audios subidos en Vercel se guardan en `/tmp` (temporal en serverless). Para persistencia usá Supabase Storage más adelante.
+- Límite de body en plan Hobby: ~4.5 MB por request (considerá esto para audios largos).
+
+---
 
 - Estructura base frontend y backend
 - Conexión PostgreSQL preparada (variables de entorno)

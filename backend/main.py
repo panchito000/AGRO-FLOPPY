@@ -10,6 +10,9 @@ app = FastAPI(
     title="Zafra AI API",
     description="Copiloto inteligente para decisiones agronómicas en soya y maíz.",
     version="0.1.0",
+    root_path=settings.root_path,
+    docs_url="/docs",
+    redoc_url="/redoc",
 )
 
 app.add_middleware(
