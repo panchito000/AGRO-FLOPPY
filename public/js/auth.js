@@ -77,11 +77,76 @@
     return session;
   }
 
+  function clearAuthMessages() {
+    ["login-error", "login-success"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.textContent = "";
+      el.hidden = true;
+    });
+  }
+
   function showLoginError(message) {
     const el = document.getElementById("login-error");
+    const successEl = document.getElementById("login-success");
+    if (successEl) successEl.hidden = true;
     if (!el) return;
     el.textContent = message;
     el.hidden = !message;
+  }
+
+  function showLoginSuccess(message) {
+    const el = document.getElementById("login-success");
+    const errorEl = document.getElementById("login-error");
+    if (errorEl) errorEl.hidden = true;
+    if (!el) return;
+    el.textContent = message;
+    el.hidden = !message;
+  }
+
+  function setRegisterMode(register, refs) {
+    const { form, toggleBtn, modeHint } = refs;
+    refs.isRegister = register;
+
+    if (modeHint) {
+      modeHint.textContent = register
+        ? "Creá una cuenta con email y contraseña."
+        : "Ingresá con tu email y contraseña.";
+    }
+    if (toggleBtn) {
+      toggleBtn.textContent = register
+        ? "¿Ya tenés cuenta? Iniciar sesión"
+        : "¿No tenés cuenta? Registrarse";
+    }
+    const submitText = document.querySelector("#btn-login .btn__text");
+    if (submitText) {
+      submitText.textContent = register ? "Crear cuenta" : "Iniciar sesión";
+    }
+    if (form?.password) {
+      form.password.autocomplete = register ? "new-password" : "current-password";
+    }
+  }
+
+  function isValidEmail(email) {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  }
+
+  function normalizeAuthError(error) {
+    const msg = (error?.message || "").toLowerCase();
+    if (msg.includes("rate limit")) {
+      return "Supabase limitó los emails por muchos intentos. Esperá 15–60 min, "
+        + "desactivá «Confirm email» en Supabase, o creá el usuario con «Add user».";
+    }
+    if (msg.includes("already registered") || msg.includes("user already registered")) {
+      return "Ese email ya está registrado. Usá «Iniciar sesión».";
+    }
+    if (msg.includes("email not confirmed")) {
+      return "Confirmá tu cuenta desde el email de Supabase antes de iniciar sesión.";
+    }
+    if (msg.includes("invalid login credentials")) {
+      return "Email o contraseña incorrectos. Si te registraste recién, confirmá el email primero.";
+    }
+    return error.message || "No se pudo completar la operación.";
   }
 
   function setLoginLoading(loading) {
@@ -103,50 +168,53 @@
     const form = document.getElementById("login-form");
     const toggleBtn = document.getElementById("btn-toggle-mode");
     const modeHint = document.getElementById("login-mode-hint");
-    let isRegister = false;
+    const refs = { form, toggleBtn, modeHint, isRegister: false };
 
     if (toggleBtn && modeHint) {
       toggleBtn.addEventListener("click", () => {
-        isRegister = !isRegister;
-        modeHint.textContent = isRegister
-          ? "Creá una cuenta con email y contraseña."
-          : "Ingresá con tu email y contraseña.";
-        toggleBtn.textContent = isRegister
-          ? "¿Ya tenés cuenta? Iniciar sesión"
-          : "¿No tenés cuenta? Registrarse";
-        const submitText = document.querySelector("#btn-login .btn__text");
-        if (submitText) {
-          submitText.textContent = isRegister ? "Crear cuenta" : "Iniciar sesión";
-        }
-        showLoginError("");
+        setRegisterMode(!refs.isRegister, refs);
+        clearAuthMessages();
       });
     }
 
     form?.addEventListener("submit", async (event) => {
       event.preventDefault();
-      showLoginError("");
+      clearAuthMessages();
       setLoginLoading(true);
 
-      const email = form.email.value.trim();
+      const email = form.email.value.trim().toLowerCase();
       const password = form.password.value;
 
+      if (!isValidEmail(email)) {
+        showLoginError("Ingresá un email válido (ejemplo: nombre@gmail.com).");
+        setLoginLoading(false);
+        return;
+      }
+
       try {
-        if (isRegister) {
-          const { error } = await getClient().auth.signUp({ email, password });
+        if (refs.isRegister) {
+          const { data, error } = await getClient().auth.signUp({ email, password });
           if (error) throw error;
-          showLoginError(
-            "Cuenta creada. Revisá tu email para confirmar (si Confirm email está activo) "
-            + "y luego iniciá sesión."
+
+          setRegisterMode(false, refs);
+          form.password.value = "";
+
+          showLoginSuccess(
+            "¡Cuenta creada correctamente! Ahora iniciá sesión con tu email y contraseña."
           );
-          isRegister = false;
-          toggleBtn?.click();
+
+          if (data.session) {
+            setTimeout(() => {
+              window.location.replace("app.html");
+            }, 2500);
+          }
         } else {
           const { error } = await getClient().auth.signInWithPassword({ email, password });
           if (error) throw error;
           window.location.replace("app.html");
         }
       } catch (error) {
-        showLoginError(error.message || "No se pudo completar la operación.");
+        showLoginError(normalizeAuthError(error));
       } finally {
         setLoginLoading(false);
       }

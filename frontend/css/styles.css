@@ -1008,6 +1008,15 @@ body.map-modal-open {
   margin-bottom: 0.75rem;
 }
 
+.auth-form__success {
+  color: var(--color-green-700);
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+  background: var(--color-green-50);
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-sm);
+}
+
 .auth-card__toggle {
   margin-top: 1rem;
 }
