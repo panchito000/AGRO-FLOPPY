@@ -286,6 +286,7 @@ def ingest_faq(chunks: list[dict]) -> None:
                 "documento_titulo": "Preguntas frecuentes Zafra AI",
                 "faq_id": i,
                 "patrones": faq.get("pregunta_patrones", []),
+                "categoria": faq.get("categoria", "informativo"),
             },
         })
 

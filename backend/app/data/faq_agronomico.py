@@ -17,6 +17,7 @@ FAQ_AGRONOMICO: list[dict] = [
             "(ej. zonas de Pailón Centro/Sur tras compactación)."
         ),
         "fuente": "CIPCA (2020) + ANAPO — frontera agrícola soyera Santa Cruz",
+        "categoria": "informativo",
     },
     {
         "pregunta_patrones": ["siembra directa", "labranza", "compactacion", "suelo compactado"],
@@ -29,11 +30,13 @@ FAQ_AGRONOMICO: list[dict] = [
             "aumenta erosión y pérdida de materia orgánica."
         ),
         "fuente": "CIPCA / Díaz (2001) citado en Mundos Rurales 2020",
+        "categoria": "informativo",
     },
     {
         "pregunta_patrones": ["peores epocas", "cuando no sembrar", "mal epoca", "no deberia sembrar"],
         "cultivo": "soya",
         "tipo_evaluacion": "siembra",
+        "categoria": "evitar",
         "respuesta": (
             "Peores momentos para sembrar soya en Santa Cruz: suelo frío o compactado, sequía fuerte antes "
             "de emergencia, justo antes de lluvias que encharquen, y en zonas ya marginales por años de "
@@ -41,11 +44,13 @@ FAQ_AGRONOMICO: list[dict] = [
             "suelo tenga humedad y temperatura adecuada."
         ),
         "fuente": "CIPCA + guía siembra Zafra AI",
+        "categoria": "evitar",
     },
     {
         "pregunta_patrones": ["maleza", "herbicida", "glifosato", "resistencia", "hoja ancha"],
         "cultivo": "soya",
         "tipo_evaluacion": "plagas",
+        "categoria": "informativo",
         "respuesta": (
             "Con siembra directa aumentaron malezas de hoja ancha; el CIAT estima 30–50% de pérdida de "
             "rendimiento por malezas si no se controlan. Evitá aplicaciones indiscriminadas de herbicidas "
@@ -53,11 +58,13 @@ FAQ_AGRONOMICO: list[dict] = [
             "Usá manejo integrado: rotación, dosis recomendadas y monitoreo previo."
         ),
         "fuente": "CIAT (2019) citado en CIPCA 2020",
+        "categoria": "informativo",
     },
     {
         "pregunta_patrones": ["plagas", "prevenir", "prevencion", "sufrir", "enfermedades soya"],
         "cultivo": "soya",
         "tipo_evaluacion": "plagas",
+        "categoria": "prevencion",
         "respuesta": (
             "Prevención de plagas en soya (Santa Cruz): monitoreo semanal, manejo integrado (MIP), "
             "rotación con maíz/sorgo, no tratar por calendario fijo. CIPCA y CIAT recomiendan frenar "
@@ -65,11 +72,13 @@ FAQ_AGRONOMICO: list[dict] = [
             "de malezas, compactación y pérdida de fertilidad."
         ),
         "fuente": "CIPCA 2020 + catálogo plagas Zafra",
+        "categoria": "prevencion",
     },
     {
         "pregunta_patrones": ["peores formas", "no deberia fertilizar", "cuando no fertilizar", "evitar fertiliz"],
         "cultivo": "soya",
         "tipo_evaluacion": "fertilizacion",
+        "categoria": "evitar",
         "respuesta": (
             "No fertilizar soya: justo antes de lluvia fuerte (lixiviación), con suelo encharcado, "
             "sin análisis de suelo (exceso de N genera vegetativo), en pleno calor con urea foliar, "
@@ -77,11 +86,13 @@ FAQ_AGRONOMICO: list[dict] = [
             "con rotaciones y técnicas conservacionistas antes de abonar a ciegas."
         ),
         "fuente": "CETABOL/CIAT — Riquezas de Bolivia + guía Zafra",
+        "categoria": "evitar",
     },
     {
-        "pregunta_patrones": ["me conviene regar", "puedo regar", "hora regar", "cuando regar"],
+        "pregunta_patrones": ["me conviene regar", "me conviene", "puedo regar", "hora regar", "cuando regar", "ahorita", "conviene regar"],
         "cultivo": "soya",
         "tipo_evaluacion": "riego",
+        "categoria": "ventana",
         "respuesta": (
             "Para regar soya en Santa Cruz: preferí madrugada (4:00–8:00) o atardecer; evitá mediodía "
             "con calor fuerte. Revisá si ya hay lluvia prevista o suelo húmedo. En el Norte Integrado "
@@ -89,11 +100,13 @@ FAQ_AGRONOMICO: list[dict] = [
             "en floración/llenado (R1–R5) con déficit real."
         ),
         "fuente": "Guía riego Zafra + CIPCA (Norte Integrado)",
+        "categoria": "ventana",
     },
     {
         "pregunta_patrones": ["no deberia hacer", "que no hacer", "evitar regar", "peores formas regar", "a la hora de regar"],
         "cultivo": "soya",
         "tipo_evaluacion": "riego",
+        "categoria": "evitar",
         "respuesta": (
             "Errores al regar: riego superficial frecuente, regar al mediodía con evaporación alta, "
             "regar con suelo encharcado, regar antes de lluvia fuerte, mojar follaje al atardecer sin secado. "
@@ -101,6 +114,7 @@ FAQ_AGRONOMICO: list[dict] = [
             "compactación y pérdida de raíces."
         ),
         "fuente": "CIAT suelos + guía riego Zafra AI",
+        "categoria": "evitar",
     },
     {
         "pregunta_patrones": ["suelo apto", "fertilidad suelo", "8 por ciento", "uso agropecuario"],
@@ -113,6 +127,7 @@ FAQ_AGRONOMICO: list[dict] = [
             "suelos frágiles con bajo retorno."
         ),
         "fuente": "GASC Plan Uso de Suelo 2009 — CIPCA 2020",
+        "categoria": "informativo",
     },
     {
         "pregunta_patrones": ["anapo", "asistencia tecnica", "semilla", "manual siembra"],
@@ -124,6 +139,7 @@ FAQ_AGRONOMICO: list[dict] = [
             "representación gremial. Publica informes de campaña y datos de superficie por zona (Este/Norte)."
         ),
         "fuente": "Riquezas de Bolivia — ANAPO (2020)",
+        "categoria": "informativo",
     },
     {
         "pregunta_patrones": ["fumigacion aerea", "avion", "aplicar producto", "viento aplicar"],
@@ -135,6 +151,7 @@ FAQ_AGRONOMICO: list[dict] = [
             "lluvia inminente ni horas de calor extremo; respetar dosis y MIP antes de entrar con avión o terrestre."
         ),
         "fuente": "Riquezas de Bolivia — Fumigación aérea Santa Cruz",
+        "categoria": "informativo",
     },
     {
         "pregunta_patrones": ["okinawa", "colonias", "cetabol", "jica"],
@@ -146,5 +163,6 @@ FAQ_AGRONOMICO: list[dict] = [
             "para el oriente — rotación, materia orgánica y evitar degradación por monocultivo intensivo."
         ),
         "fuente": "Riquezas de Bolivia — CETABOL/JICA",
+        "categoria": "informativo",
     },
 ]

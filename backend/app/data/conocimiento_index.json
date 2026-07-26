@@ -23032,7 +23032,8 @@
           "norte integrado",
           "donde se siembra",
           "region soya"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {
@@ -23059,7 +23060,8 @@
           "labranza",
           "compactacion",
           "suelo compactado"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {
@@ -23086,7 +23088,8 @@
           "cuando no sembrar",
           "mal epoca",
           "no deberia sembrar"
-        ]
+        ],
+        "categoria": "evitar"
       }
     },
     {
@@ -23115,7 +23118,8 @@
           "glifosato",
           "resistencia",
           "hoja ancha"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {
@@ -23144,7 +23148,8 @@
           "prevencion",
           "sufrir",
           "enfermedades soya"
-        ]
+        ],
+        "categoria": "prevencion"
       }
     },
     {
@@ -23171,7 +23176,8 @@
           "no deberia fertilizar",
           "cuando no fertilizar",
           "evitar fertiliz"
-        ]
+        ],
+        "categoria": "evitar"
       }
     },
     {
@@ -23184,6 +23190,7 @@
       "etiquetas": [
         "faq",
         "me conviene regar",
+        "me conviene",
         "puedo regar",
         "hora regar",
         "cuando regar"
@@ -23195,10 +23202,14 @@
         "faq_id": 6,
         "patrones": [
           "me conviene regar",
+          "me conviene",
           "puedo regar",
           "hora regar",
-          "cuando regar"
-        ]
+          "cuando regar",
+          "ahorita",
+          "conviene regar"
+        ],
+        "categoria": "ventana"
       }
     },
     {
@@ -23227,7 +23238,8 @@
           "evitar regar",
           "peores formas regar",
           "a la hora de regar"
-        ]
+        ],
+        "categoria": "evitar"
       }
     },
     {
@@ -23254,7 +23266,8 @@
           "fertilidad suelo",
           "8 por ciento",
           "uso agropecuario"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {
@@ -23281,7 +23294,8 @@
           "asistencia tecnica",
           "semilla",
           "manual siembra"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {
@@ -23308,7 +23322,8 @@
           "avion",
           "aplicar producto",
           "viento aplicar"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {
@@ -23335,7 +23350,8 @@
           "colonias",
           "cetabol",
           "jica"
-        ]
+        ],
+        "categoria": "informativo"
       }
     },
     {

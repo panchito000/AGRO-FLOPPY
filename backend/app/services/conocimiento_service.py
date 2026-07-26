@@ -73,8 +73,73 @@ def _tokens(texto: str | None) -> set[str]:
     return base | extra
 
 
+def _coincide(texto: str, *patrones: str) -> bool:
+    return any(re.search(p, texto) for p in patrones)
+
+
+def _texto_pide_evitar(texto: str | None, tipo_evaluacion: str) -> bool:
+    """True solo si el usuario pregunta explícitamente qué NO hacer o peores prácticas."""
+    if not texto:
+        return False
+    t = _normalizar(texto)
+    comunes = (
+        r"peor(es)?\s+(formas?|maneras?|momentos?|epocas?|practicas?)",
+        r"no\s+deber[ií]a\s+hacer",
+        r"cosas?\s+no\s+deber[ií]a",
+        r"qu[eé]\s+cosas?\s+no",
+        r"qu[eé]\s+evitar",
+        r"cu[aá]ndo\s+no",
+        r"errores?\s+",
+    )
+    if any(re.search(p, t) for p in comunes):
+        return True
+    if tipo_evaluacion == "riego":
+        return _coincide(t, r"evitar.*regar", r"peor.*regar", r"mal.*regar", r"a la hora de regar")
+    if tipo_evaluacion == "fertilizacion":
+        return _coincide(t, r"evitar.*fertiliz", r"peor.*fertiliz", r"mal.*fertiliz", r"no.*fertiliz")
+    if tipo_evaluacion == "siembra":
+        return _coincide(t, r"peor.*sembr", r"cu[aá]ndo\s+no\s+sembr", r"evitar.*siembra", r"mal.*epoca")
+    return False
+
+
+def _texto_pide_prevencion(texto: str | None) -> bool:
+    if not texto:
+        return False
+    t = _normalizar(texto)
+    return _coincide(t, r"prevenir", r"prevenci", r"como\s+evitar", r"sufrir", r"manejo\s+integrado")
+
+
+def _faq_categoria(chunk: dict) -> str:
+    meta = chunk.get("metadata") or {}
+    cat = meta.get("categoria")
+    if cat:
+        return cat
+    patrones = " ".join(meta.get("patrones") or chunk.get("etiquetas") or [])
+    pn = _normalizar(patrones)
+    if _coincide(pn, r"que no hacer", r"peores formas", r"cuando no", r"evitar regar", r"no deberia"):
+        return "evitar"
+    if _coincide(pn, r"prevenir", r"prevencion", r"sufrir"):
+        return "prevencion"
+    if _coincide(pn, r"me conviene", r"conviene regar", r"ahorita"):
+        return "ventana"
+    return "informativo"
+
+
+def _faq_permitido(chunk: dict, texto: str | None, tipo_evaluacion: str) -> bool:
+    if chunk.get("documento_tipo") != "faq":
+        return True
+    cat = _faq_categoria(chunk)
+    if cat == "evitar":
+        return _texto_pide_evitar(texto, tipo_evaluacion)
+    if cat == "prevencion":
+        return _texto_pide_prevencion(texto)
+    return True
+
+
 def _score_faq(chunk: dict, texto: str | None, cultivo: str, tipo_evaluacion: str) -> float:
     if chunk.get("documento_tipo") != "faq":
+        return 0.0
+    if not _faq_permitido(chunk, texto, tipo_evaluacion):
         return 0.0
     meta = chunk.get("metadata") or {}
     patrones = meta.get("patrones") or chunk.get("etiquetas") or []
@@ -83,11 +148,17 @@ def _score_faq(chunk: dict, texto: str | None, cultivo: str, tipo_evaluacion: st
     t = _normalizar(texto)
     score = 0.0
     for p in patrones:
+        if not p or p == "faq":
+            continue
         pn = _normalizar(p)
-        if pn in t or all(part in t for part in pn.split() if len(part) > 3):
-            score += 8.0
-        elif any(part in t for part in pn.split() if len(part) > 4):
-            score += 4.0
+        if pn in t:
+            score += 10.0
+            continue
+        partes = [part for part in pn.split() if len(part) > 3]
+        if len(partes) >= 2 and sum(1 for part in partes if part in t) >= 2:
+            score += 7.0
+    if score == 0.0:
+        return 0.0
     if chunk.get("cultivo") == cultivo:
         score += 3.0
     if chunk.get("tipo_evaluacion") == tipo_evaluacion:
@@ -158,6 +229,8 @@ def _buscar_en_lista(
 
     scored: list[tuple[float, dict]] = []
     for ch in chunks:
+        if not _faq_permitido(ch, texto, tipo_evaluacion):
+            continue
         s = _score_chunk(ch, tokens, cultivo, tipo_evaluacion, texto)
         if s > 0:
             scored.append((s, ch))
