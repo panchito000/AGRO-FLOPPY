@@ -23,7 +23,11 @@ def load_database_url() -> str:
         for line in env_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line.startswith("DATABASE_URL="):
-                return line.split("=", 1)[1].strip().strip('"').strip("'")
+                url = line.split("=", 1)[1].strip().strip('"').strip("'")
+                if "sslmode=" not in url:
+                    sep = "&" if "?" in url else "?"
+                    url = f"{url}{sep}sslmode=require"
+                return url
 
     url = os.getenv("DATABASE_URL")
     if not url:
