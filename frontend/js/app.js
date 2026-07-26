@@ -159,11 +159,8 @@ function updateDictationBadge(active, detail, hint) {
 
   if (detail === "unsupported") {
     dictationBadge.hidden = false;
-    dictationBadge.textContent = "Dictado en vivo: no disponible en este navegador (usá Chrome o Edge)";
+    dictationBadge.textContent = hint || "Dictado en vivo: no disponible (usá Chrome en Android/Samsung)";
     dictationBadge.className = "dictation-badge dictation-badge--warn";
-    if (hint && dictationHint) {
-      dictationHint.textContent = hint;
-    }
     return;
   }
 
@@ -176,6 +173,20 @@ function updateDictationBadge(active, detail, hint) {
   dictationBadge.hidden = false;
   dictationBadge.textContent = "Dictado en vivo: activo — mirá Notas mientras hablás";
   dictationBadge.className = "dictation-badge dictation-badge--on";
+}
+
+function showCompatibilityHint() {
+  if (!window.ZafraAudioRecorder?.getCompatibilityHint || !dictationHint) return;
+
+  const hint = ZafraAudioRecorder.getCompatibilityHint();
+  if (!hint) return;
+
+  dictationHint.textContent = hint.message;
+  if (hint.level === "error" && dictationBadge) {
+    dictationBadge.hidden = false;
+    dictationBadge.textContent = hint.message;
+    dictationBadge.className = "dictation-badge dictation-badge--warn";
+  }
 }
 
 function hasTextoOAudio() {

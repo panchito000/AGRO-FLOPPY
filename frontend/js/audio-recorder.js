@@ -1,6 +1,6 @@
 /**
  * Zafra AI — Grabación de audio + dictado en tiempo real (Web Speech API).
- * En PC: el dictado arranca antes del grabador para evitar conflicto de micrófono.
+ * Dictado primero en PC y Android; solo grabador en iPhone (Safari).
  */
 (function (global) {
   "use strict";
@@ -52,8 +52,64 @@
     return global.isSecureContext === true;
   }
 
-  function isMobileDevice() {
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  function isIOS() {
+    return /iPhone|iPad|iPod/i.test(navigator.userAgent || "");
+  }
+
+  function isAndroid() {
+    return /Android/i.test(navigator.userAgent || "");
+  }
+
+  function getBrowserInfo() {
+    const ua = navigator.userAgent || "";
+
+    if (/SamsungBrowser/i.test(ua)) {
+      return { id: "samsung", name: "Samsung Internet", isProblematic: true };
+    }
+    if (/FBAN|FBAV|Instagram|WhatsApp|Line\//i.test(ua)) {
+      return { id: "inapp", name: "app embebida (WhatsApp/Instagram)", isProblematic: true };
+    }
+    if (/EdgA/i.test(ua)) {
+      return { id: "edge-android", name: "Edge", isProblematic: false };
+    }
+    if (/Edg/i.test(ua)) {
+      return { id: "edge", name: "Edge", isProblematic: false };
+    }
+    if (/CriOS/i.test(ua)) {
+      return { id: "chrome-ios", name: "Chrome", isProblematic: false };
+    }
+    if (/Chrome/i.test(ua)) {
+      return { id: "chrome", name: "Chrome", isProblematic: false };
+    }
+    if (/Firefox/i.test(ua)) {
+      return { id: "firefox", name: "Firefox", isProblematic: true };
+    }
+    if (/Safari/i.test(ua)) {
+      return { id: "safari", name: "Safari", isProblematic: isIOS() };
+    }
+    return { id: "other", name: "navegador", isProblematic: false };
+  }
+
+  function shouldUseSpeechFirst() {
+    return AudioRecorder.isSpeechSupported() && !isIOS();
+  }
+
+  function requestMicrophone() {
+    const detailed = {
+      audio: {
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    };
+    const simple = { audio: true };
+
+    return navigator.mediaDevices.getUserMedia(detailed).catch((firstError) => {
+      if (firstError?.name === "NotAllowedError" || firstError?.name === "NotFoundError") {
+        throw firstError;
+      }
+      return navigator.mediaDevices.getUserMedia(simple);
+    });
   }
 
   function AudioRecorder(options) {
@@ -81,7 +137,64 @@
     this._recorderStarted = false;
   }
 
+  AudioRecorder.getBrowserInfo = getBrowserInfo;
+  AudioRecorder.isIOS = isIOS;
+  AudioRecorder.isAndroid = isAndroid;
+
+  AudioRecorder.getCompatibilityHint = function () {
+    const browser = getBrowserInfo();
+
+    if (browser.id === "inapp") {
+      return {
+        level: "error",
+        message: "Abrí la página en Chrome (⋮ → Abrir en Chrome). WhatsApp e Instagram no permiten micrófono.",
+      };
+    }
+
+    if (browser.id === "samsung" && !AudioRecorder.isSpeechSupported()) {
+      return {
+        level: "warn",
+        message: "En Samsung Internet el dictado en vivo no funciona bien. Usá Chrome desde Play Store.",
+      };
+    }
+
+    if (browser.id === "firefox") {
+      return {
+        level: "warn",
+        message: "Firefox no tiene dictado en vivo. Usá Chrome para que escriba mientras hablás.",
+      };
+    }
+
+    if (isAndroid() && browser.id === "chrome") {
+      return {
+        level: "ok",
+        message: "Android + Chrome: dictado y grabación disponibles.",
+      };
+    }
+
+    if (isIOS()) {
+      return {
+        level: "warn",
+        message: "En iPhone la grabación funciona; el dictado en vivo puede ser limitado. Podés escribir en Notas.",
+      };
+    }
+
+    if (!AudioRecorder.isSpeechSupported()) {
+      return {
+        level: "warn",
+        message: "Usá Chrome o Edge para dictado en vivo. También podés escribir en Notas.",
+      };
+    }
+
+    return null;
+  };
+
   AudioRecorder.isRecordingSupported = function () {
+    const browser = getBrowserInfo();
+    if (browser.id === "inapp") {
+      return false;
+    }
+
     return (
       isSecureContext() &&
       typeof navigator !== "undefined" &&
@@ -160,18 +273,14 @@
     this._speech.onerror = (event) => {
       const err = event.error || "";
 
-      if (err === "aborted") {
-        return;
-      }
-
-      if (err === "no-speech") {
+      if (err === "aborted" || err === "no-speech") {
         return;
       }
 
       if (err === "not-allowed") {
         this._setDictation(false, "denied");
-        this.onError("Dictado bloqueado. Permití el micrófono o escribí en Notas.");
         this._maybeStartMediaRecorder();
+        this.onStatus("Dictado bloqueado. Grabando solo audio — escribí en Notas.");
         return;
       }
 
@@ -304,7 +413,7 @@
     try {
       this._mediaRecorder.start(250);
     } catch (_err) {
-      this.onError("No se pudo iniciar la grabación de audio.");
+      this.onError("No se pudo iniciar la grabación. Probá Chrome en Android.");
     }
 
     this._updateRecordingStatus();
@@ -317,10 +426,9 @@
     this._speechRetryCount = 0;
 
     const speechAvailable = AudioRecorder.isSpeechSupported();
-    const desktop = !isMobileDevice();
 
-    if (speechAvailable && desktop) {
-      // PC: dictado primero, grabador después (evita conflicto de micrófono en Windows).
+    // PC y Android: dictado primero (evita conflicto de micrófono en Windows y Samsung).
+    if (shouldUseSpeechFirst()) {
       this._setDictation(false, "starting");
       this.onStatus("Iniciando dictado en vivo…");
       const speechStarted = this._startSpeech();
@@ -336,6 +444,7 @@
       return;
     }
 
+    // iPhone / sin dictado: solo grabador de audio.
     if (speechAvailable) {
       this._maybeStartMediaRecorder();
       this._startSpeech();
@@ -356,7 +465,7 @@
     if (AudioRecorder.isSpeechSupported()) {
       this.onStatus("Grabando audio… si no ves texto en Notas, escribí tu consulta manualmente.");
     } else {
-      this.onStatus("Grabando audio… escribí tu consulta en Notas (dictado no disponible en este navegador).");
+      this.onStatus("Grabando audio… escribí tu consulta en Notas.");
     }
   };
 
@@ -407,10 +516,17 @@
       return;
     }
 
+    const browser = getBrowserInfo();
+
+    if (browser.id === "inapp") {
+      this.onError("Abrí la página en Chrome (⋮ → Abrir en Chrome). Esta app no permite micrófono.");
+      return;
+    }
+
     if (!AudioRecorder.isRecordingSupported()) {
       const msg = isSecureContext()
-        ? "Tu navegador no permite grabar audio. Probá Chrome o Edge."
-        : "La grabación requiere HTTPS. Abrí la app desde https://agro-floppy.vercel.app";
+        ? "Tu navegador no permite grabar audio. En Samsung usá Chrome."
+        : "La grabación requiere HTTPS. Abrí https://agro-floppy.vercel.app";
       this.onError(msg);
       return;
     }
@@ -419,7 +535,9 @@
       this.onDictationChange({
         active: false,
         detail: "unsupported",
-        hint: "Usá Chrome o Edge para dictado en vivo. También podés escribir en Notas.",
+        hint: browser.id === "samsung"
+          ? "Samsung Internet: instalá Chrome para dictado en vivo, o escribí en Notas."
+          : "Usá Chrome para dictado en vivo. También podés escribir en Notas.",
       });
     }
 
@@ -433,14 +551,7 @@
     this._setState("requesting");
     this.onStatus("Solicitando micrófono…");
 
-    navigator.mediaDevices
-      .getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-      })
+    requestMicrophone()
       .then((stream) => {
         if (this._cancelRequested) {
           stream.getTracks().forEach((track) => track.stop());
@@ -465,11 +576,11 @@
 
         const name = error?.name || "";
         if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-          this.onError("Permiso de micrófono denegado. Activá el micrófono en ajustes del navegador.");
+          this.onError("Permiso de micrófono denegado. Revisá Ajustes → Apps → Chrome → Permisos → Micrófono.");
         } else if (name === "NotFoundError") {
           this.onError("No se encontró micrófono en este dispositivo.");
         } else {
-          this.onError("No se pudo acceder al micrófono.");
+          this.onError("No se pudo acceder al micrófono. Probá Chrome en Android.");
         }
       });
   };
