@@ -222,6 +222,16 @@ function showResults(data) {
     ${data.texto ? `<p class="result-meta"><strong>Notas:</strong> ${data.texto}</p>` : ""}
     ${data.audio_recibido ? `<p class="result-meta"><strong>Audio:</strong> ${data.audio_nombre}</p>` : ""}
   `;
+
+  scrollToResults();
+}
+
+function scrollToResults() {
+  const target = document.getElementById("resultados");
+  if (!target) return;
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function renderAdvertencias(advertencias) {

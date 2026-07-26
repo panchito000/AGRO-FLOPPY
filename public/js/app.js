@@ -203,6 +203,8 @@ function showResults(data) {
   `;
 
   resultContents.recomendacion.hidden = false;
+  const recPlaceholder = resultCards.recomendacion.querySelector(".card__placeholder");
+  if (recPlaceholder) recPlaceholder.hidden = true;
   resultContents.recomendacion.innerHTML = `
     <p><strong>Cultivo:</strong> ${formatCultivo(data.cultivo)}</p>
     <p><strong>Evaluación:</strong> ${formatTipo(data.tipo_evaluacion)}</p>
@@ -213,11 +215,23 @@ function showResults(data) {
   `;
 
   resultContents.explicacion.hidden = false;
+  const expPlaceholder = resultCards.explicacion.querySelector(".card__placeholder");
+  if (expPlaceholder) expPlaceholder.hidden = true;
   resultContents.explicacion.innerHTML = `
     <p>${data.explicacion || data.mensaje || "Sin explicación disponible."}</p>
     ${data.texto ? `<p class="result-meta"><strong>Notas:</strong> ${data.texto}</p>` : ""}
     ${data.audio_recibido ? `<p class="result-meta"><strong>Audio:</strong> ${data.audio_nombre}</p>` : ""}
   `;
+
+  scrollToResults();
+}
+
+function scrollToResults() {
+  const target = document.getElementById("resultados");
+  if (!target) return;
+  requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
 function renderAdvertencias(advertencias) {
