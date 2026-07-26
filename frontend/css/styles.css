@@ -612,13 +612,17 @@ body.map-modal-open {
 }
 
 .recording-indicator {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 0.5rem;
   margin: 0;
   font-size: 0.875rem;
   font-weight: 600;
   color: var(--color-green-700);
+}
+
+.recording-indicator.is-active {
+  display: flex;
 }
 
 .recording-indicator__dot {
@@ -646,9 +650,14 @@ body.map-modal-open {
 }
 
 .dictation-badge {
+  display: none;
   margin: 0.35rem 0 0;
   font-size: 0.8125rem;
   font-weight: 600;
+}
+
+.dictation-badge.is-visible {
+  display: block;
 }
 
 .dictation-badge--on {

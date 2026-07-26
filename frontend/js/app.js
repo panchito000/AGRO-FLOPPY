@@ -102,6 +102,7 @@ function setRecordingUi(active, phase) {
   btnGrabar.disabled = active;
   btnDetener.disabled = !active || phase === "processing";
   if (recordingIndicator) {
+    recordingIndicator.classList.toggle("is-active", isRecording);
     recordingIndicator.hidden = !isRecording;
   }
 }
@@ -159,20 +160,23 @@ function updateDictationBadge(active, detail, hint) {
 
   if (detail === "unsupported") {
     dictationBadge.hidden = false;
+    dictationBadge.classList.add("is-visible");
     dictationBadge.textContent = hint || "Dictado en vivo: no disponible (usá Chrome en Android/Samsung)";
-    dictationBadge.className = "dictation-badge dictation-badge--warn";
+    dictationBadge.className = "dictation-badge dictation-badge--warn is-visible";
     return;
   }
 
   if (!active) {
     dictationBadge.hidden = true;
+    dictationBadge.classList.remove("is-visible");
     dictationBadge.className = "dictation-badge dictation-badge--off";
     return;
   }
 
   dictationBadge.hidden = false;
+  dictationBadge.classList.add("is-visible");
   dictationBadge.textContent = "Dictado en vivo: activo — mirá Notas mientras hablás";
-  dictationBadge.className = "dictation-badge dictation-badge--on";
+  dictationBadge.className = "dictation-badge dictation-badge--on is-visible";
 }
 
 function showCompatibilityHint() {
@@ -270,6 +274,7 @@ function initAudioRecorder() {
   }
 
   showCompatibilityHint();
+  setRecordingUi(false);
 }
 
 function startRecording() {
