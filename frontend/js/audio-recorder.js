@@ -1,6 +1,6 @@
 /**
  * Zafra AI — Grabación de audio + dictado en tiempo real (Web Speech API).
- * Dictado primero en PC y Android; solo grabador en iPhone (Safari).
+ * PC/Android: dictado ANTES de getUserMedia (evita que el grabador bloquee el texto en vivo).
  */
 (function (global) {
   "use strict";
@@ -135,6 +135,9 @@
     this._langIndex = 0;
     this._speechRetryCount = 0;
     this._recorderStarted = false;
+    this._mediaCaptureStarted = false;
+    this._mediaFallbackTimer = null;
+    this._speechFirstMode = false;
   }
 
   AudioRecorder.getBrowserInfo = getBrowserInfo;
@@ -162,13 +165,6 @@
       return {
         level: "warn",
         message: "Firefox no tiene dictado en vivo. Usá Chrome para que escriba mientras hablás.",
-      };
-    }
-
-    if (isAndroid() && browser.id === "chrome") {
-      return {
-        level: "ok",
-        message: "Android + Chrome: dictado y grabación disponibles.",
       };
     }
 
@@ -211,6 +207,13 @@
   AudioRecorder.pickMimeType = pickMimeType;
   AudioRecorder.extensionForMime = extensionForMime;
 
+  AudioRecorder.prototype._clearMediaFallbackTimer = function () {
+    if (this._mediaFallbackTimer) {
+      clearTimeout(this._mediaFallbackTimer);
+      this._mediaFallbackTimer = null;
+    }
+  };
+
   AudioRecorder.prototype._setState = function (state) {
     this._state = state;
     this.onStateChange({
@@ -231,9 +234,11 @@
     if (this._baseText) parts.push(this._baseText);
     if (this._finalText) parts.push(this._finalText);
     const committed = parts.join(parts.length > 1 && this._baseText && this._finalText ? " " : "");
+    const display = [committed, this._interimText].filter(Boolean).join(committed && this._interimText ? " " : "");
     const canUpdate = this._state === "recording" || this._state === "processing";
+
     this.onTranscript({
-      display: [committed, this._interimText].filter(Boolean).join(committed && this._interimText ? " " : ""),
+      display,
       committed: committed.trim(),
       interim: this._interimText.trim(),
       isRecording: canUpdate,
@@ -267,7 +272,16 @@
 
     this._speech.onstart = () => {
       this._setDictation(true, "active");
-      this._maybeStartMediaRecorder();
+      this.onStatus("Dictado activo — hablá y mirá Notas.");
+      if (this._speechFirstMode) {
+        this._ensureMediaCapture();
+      }
+    };
+
+    this._speech.onaudiostart = () => {
+      if (this._speechFirstMode) {
+        this._ensureMediaCapture();
+      }
     };
 
     this._speech.onerror = (event) => {
@@ -279,7 +293,9 @@
 
       if (err === "not-allowed") {
         this._setDictation(false, "denied");
-        this._maybeStartMediaRecorder();
+        if (this._speechFirstMode) {
+          this._ensureMediaCapture();
+        }
         this.onStatus("Dictado bloqueado. Grabando solo audio — escribí en Notas.");
         return;
       }
@@ -287,7 +303,9 @@
       if (err === "network") {
         this._setDictation(false, "network");
         this._retrySpeech("Sin conexión para dictado. Reintentando…");
-        this._maybeStartMediaRecorder();
+        if (this._speechFirstMode) {
+          this._ensureMediaCapture();
+        }
         return;
       }
 
@@ -298,7 +316,9 @@
       }
 
       this._setDictation(false, "error");
-      this._maybeStartMediaRecorder();
+      if (this._speechFirstMode) {
+        this._ensureMediaCapture();
+      }
     };
 
     this._speech.onend = () => {
@@ -412,48 +432,112 @@
     this._recorderStarted = true;
     try {
       this._mediaRecorder.start(250);
+      this._updateRecordingStatus();
     } catch (_err) {
-      this.onError("No se pudo iniciar la grabación. Probá Chrome en Android.");
+      this.onStatus("Dictado activo. No se pudo grabar audio — igual podés usar el texto en Notas.");
     }
-
-    this._updateRecordingStatus();
   };
 
-  AudioRecorder.prototype._beginRecordingPhase = function () {
-    this._setState("recording");
-    this._recorderStarted = false;
-    this._langIndex = 0;
-    this._speechRetryCount = 0;
-
-    const speechAvailable = AudioRecorder.isSpeechSupported();
-
-    // PC y Android: dictado primero (evita conflicto de micrófono en Windows y Samsung).
-    if (shouldUseSpeechFirst()) {
-      this._setDictation(false, "starting");
-      this.onStatus("Iniciando dictado en vivo…");
-      const speechStarted = this._startSpeech();
-      if (!speechStarted) {
-        this._maybeStartMediaRecorder();
-        this._updateRecordingStatus();
-      } else {
-        window.setTimeout(() => {
-          this._maybeStartMediaRecorder();
-          this._updateRecordingStatus();
-        }, 1200);
-      }
+  AudioRecorder.prototype._ensureMediaCapture = function () {
+    if (this._mediaCaptureStarted || this._cancelRequested || this._state !== "recording") {
       return;
     }
 
-    // iPhone / sin dictado: solo grabador de audio.
-    if (speechAvailable) {
-      this._maybeStartMediaRecorder();
-      this._startSpeech();
-    } else {
-      this._maybeStartMediaRecorder();
-    }
+    this._mediaCaptureStarted = true;
+    this._clearMediaFallbackTimer();
 
-    this._updateRecordingStatus();
-    this._emitTranscript();
+    requestMicrophone()
+      .then((stream) => {
+        if (this._cancelRequested || this._state !== "recording") {
+          stream.getTracks().forEach((track) => track.stop());
+          return;
+        }
+
+        this._setupMediaRecorder(stream);
+        this._maybeStartMediaRecorder();
+      })
+      .catch(() => {
+        if (this._dictationActive) {
+          this.onStatus("Dictado activo (sin archivo de audio). Escribí o hablá y usá Analizar.");
+        }
+      });
+  };
+
+  AudioRecorder.prototype._startSpeechFirstPath = function () {
+    this._speechFirstMode = true;
+    this._setState("requesting");
+    this.onStatus("Iniciando dictado en vivo…");
+    this._setState("recording");
+    this._recorderStarted = false;
+    this._mediaCaptureStarted = false;
+    this._langIndex = 0;
+    this._speechRetryCount = 0;
+
+    const speechStarted = this._startSpeech();
+
+    this._mediaFallbackTimer = window.setTimeout(() => {
+      this._ensureMediaCapture();
+    }, speechStarted ? 2000 : 500);
+
+    if (!speechStarted) {
+      this._ensureMediaCapture();
+      this.onStatus("Grabando audio… escribí en Notas si no aparece el dictado.");
+    }
+  };
+
+  AudioRecorder.prototype._startMediaFirstPath = function () {
+    this._speechFirstMode = false;
+    this._setState("requesting");
+    this.onStatus("Solicitando micrófono…");
+
+    requestMicrophone()
+      .then((stream) => {
+        if (this._cancelRequested) {
+          stream.getTracks().forEach((track) => track.stop());
+          this._finishCancelled();
+          return;
+        }
+
+        this._setupMediaRecorder(stream);
+
+        if (this._cancelRequested) {
+          this._finishCancelled();
+          return;
+        }
+
+        this._setState("recording");
+        this._recorderStarted = false;
+        this._langIndex = 0;
+        this._speechRetryCount = 0;
+
+        this._maybeStartMediaRecorder();
+
+        if (AudioRecorder.isSpeechSupported()) {
+          this._startSpeech();
+        }
+
+        this._updateRecordingStatus();
+        this._emitTranscript();
+      })
+      .catch((error) => {
+        this._handleMicError(error);
+      });
+  };
+
+  AudioRecorder.prototype._handleMicError = function (error) {
+    this._cleanupStream();
+    this._resetSession();
+    this._setState("idle");
+    this._setDictation(false, "idle");
+
+    const name = error?.name || "";
+    if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+      this.onError("Permiso de micrófono denegado. Revisá permisos del navegador.");
+    } else if (name === "NotFoundError") {
+      this.onError("No se encontró micrófono en este dispositivo.");
+    } else {
+      this.onError("No se pudo acceder al micrófono.");
+    }
   };
 
   AudioRecorder.prototype._updateRecordingStatus = function () {
@@ -493,16 +577,34 @@
   };
 
   AudioRecorder.prototype._resetSession = function () {
+    this._clearMediaFallbackTimer();
     this._mediaRecorder = null;
     this._chunks = [];
     this._mimeType = "";
     this._cancelRequested = false;
     this._recorderStarted = false;
+    this._mediaCaptureStarted = false;
+    this._speechFirstMode = false;
     this._langIndex = 0;
     this._speechRetryCount = 0;
   };
 
+  AudioRecorder.prototype._finishWithoutAudio = function () {
+    this._stopSpeech();
+    this._cleanupStream();
+    this._resetSession();
+    this._setState("idle");
+    this._setDictation(false, "idle");
+    this.onComplete({
+      blob: null,
+      mimeType: "",
+      extension: ".webm",
+      textOnly: true,
+    });
+  };
+
   AudioRecorder.prototype._finishCancelled = function () {
+    this._clearMediaFallbackTimer();
     this._stopSpeech();
     this._cleanupStream();
     this._resetSession();
@@ -523,11 +625,8 @@
       return;
     }
 
-    if (!AudioRecorder.isRecordingSupported()) {
-      const msg = isSecureContext()
-        ? "Tu navegador no permite grabar audio. En Samsung usá Chrome."
-        : "La grabación requiere HTTPS. Abrí https://agro-floppy.vercel.app";
-      this.onError(msg);
+    if (!AudioRecorder.isRecordingSupported() && !AudioRecorder.isSpeechSupported()) {
+      this.onError("Tu navegador no permite grabar ni dictar. Usá Chrome.");
       return;
     }
 
@@ -548,47 +647,19 @@
     this._mimeType = pickMimeType();
     this._cancelRequested = false;
 
-    this._setState("requesting");
-    this.onStatus("Solicitando micrófono…");
-
-    requestMicrophone()
-      .then((stream) => {
-        if (this._cancelRequested) {
-          stream.getTracks().forEach((track) => track.stop());
-          this._finishCancelled();
-          return;
-        }
-
-        this._setupMediaRecorder(stream);
-
-        if (this._cancelRequested) {
-          this._finishCancelled();
-          return;
-        }
-
-        this._beginRecordingPhase();
-      })
-      .catch((error) => {
-        this._cleanupStream();
-        this._resetSession();
-        this._setState("idle");
-        this._setDictation(false, "idle");
-
-        const name = error?.name || "";
-        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-          this.onError("Permiso de micrófono denegado. Revisá Ajustes → Apps → Chrome → Permisos → Micrófono.");
-        } else if (name === "NotFoundError") {
-          this.onError("No se encontró micrófono en este dispositivo.");
-        } else {
-          this.onError("No se pudo acceder al micrófono. Probá Chrome en Android.");
-        }
-      });
+    if (shouldUseSpeechFirst()) {
+      this._startSpeechFirstPath();
+    } else {
+      this._startMediaFirstPath();
+    }
   };
 
   AudioRecorder.prototype.stop = function () {
     if (this._state === "idle") {
       return;
     }
+
+    this._clearMediaFallbackTimer();
 
     if (this._state === "requesting") {
       this._cancelRequested = true;
@@ -603,18 +674,20 @@
     this._setState("processing");
     this._stopSpeech();
     this._setDictation(false, "idle");
-    this.onStatus("Guardando grabación…");
+    this.onStatus("Guardando…");
 
     if (this._mediaRecorder && this._mediaRecorder.state !== "inactive") {
       try {
         this._mediaRecorder.requestData();
         this._mediaRecorder.stop();
       } catch (_err) {
-        this._cleanupStream();
-        this._resetSession();
-        this._setState("idle");
-        this.onError("No se pudo guardar la grabación.");
+        this._finishWithoutAudio();
       }
+      return;
+    }
+
+    if (this.getCommittedText()) {
+      this._finishWithoutAudio();
       return;
     }
 

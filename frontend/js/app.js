@@ -215,19 +215,28 @@ function initAudioRecorder() {
       updateDictationBadge(active, detail, hint);
     },
     onTranscript: ({ display, isRecording }) => {
-      if (display && isRecording) {
+      if (display && (isRecording || audioRecorder?.isActive())) {
         textoInput.value = display;
         textoInput.classList.add("form__textarea--dictating");
         textoInput.scrollTop = textoInput.scrollHeight;
       }
     },
-    onComplete: ({ blob, mimeType, extension }) => {
-      recordedBlob = blob;
-      recordedMimeType = mimeType;
-      recordedExtension = extension;
+    onComplete: ({ blob, mimeType, extension, textOnly }) => {
+      if (blob) {
+        recordedBlob = blob;
+        recordedMimeType = mimeType;
+        recordedExtension = extension;
+        setAudioPreview(recordedBlob);
+        btnLimpiarAudio.disabled = false;
+        updateAudioStatus(`Grabación lista (${formatBytes(recordedBlob.size)}). Revisá las notas y tocá Analizar.`);
+      } else {
+        recordedBlob = null;
+        setAudioPreview(null);
+        btnLimpiarAudio.disabled = true;
+        updateAudioStatus(textOnly ? "Texto listo. Revisá Notas y tocá Analizar." : "Listo. Revisá Notas y tocá Analizar.");
+      }
+
       audioFileInput.value = "";
-      setAudioPreview(recordedBlob);
-      btnLimpiarAudio.disabled = false;
       setRecordingUi(false);
       updateDictationBadge(false, "idle");
       textoInput.classList.remove("form__textarea--dictating");
@@ -236,8 +245,6 @@ function initAudioRecorder() {
       if (committed) {
         textoInput.value = committed;
       }
-
-      updateAudioStatus(`Grabación lista (${formatBytes(recordedBlob.size)}). Revisá las notas y tocá Analizar.`);
 
       if (!committed) {
         showToast("No se detectó texto. Escribí tu consulta en Notas antes de analizar.", true);
@@ -252,12 +259,17 @@ function initAudioRecorder() {
   });
 
   if (!ZafraAudioRecorder.isSpeechSupported()) {
+    const browser = ZafraAudioRecorder.getBrowserInfo?.() || {};
     updateDictationBadge(
       false,
       "unsupported",
-      "Usá Chrome o Edge para dictado en vivo. También podés escribir en Notas."
+      browser.id === "samsung"
+        ? "Samsung Internet: instalá Chrome para dictado en vivo, o escribí en Notas."
+        : "Usá Chrome para dictado en vivo. También podés escribir en Notas."
     );
   }
+
+  showCompatibilityHint();
 }
 
 function startRecording() {
