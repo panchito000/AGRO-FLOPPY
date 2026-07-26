@@ -316,6 +316,132 @@ def _bloque_clima(condiciones: dict) -> list[str]:
     ]
 
 
+_CLAVE_CLIMA_POR_TEMA: dict[str, list[tuple[str, str]]] = {
+    "riego": [
+        ("humedad_suelo_pct", "Humedad suelo"),
+        ("prob_lluvia_pct", "Prob. lluvia"),
+        ("temperatura_c", "Temperatura"),
+    ],
+    "fertilizacion": [
+        ("prob_lluvia_pct", "Prob. lluvia"),
+        ("viento_kmh", "Viento"),
+        ("temperatura_c", "Temperatura"),
+    ],
+    "siembra": [
+        ("temp_suelo_c", "Temp. suelo"),
+        ("humedad_suelo_pct", "Humedad suelo"),
+        ("prob_lluvia_pct", "Prob. lluvia"),
+    ],
+    "plagas": [
+        ("viento_kmh", "Viento"),
+        ("humedad_pct", "Humedad"),
+        ("temperatura_c", "Temperatura"),
+    ],
+    "cosecha": [
+        ("prob_lluvia_pct", "Prob. lluvia"),
+        ("humedad_pct", "Humedad aire"),
+        ("temperatura_c", "Temperatura"),
+    ],
+}
+
+_ACCION_POR_TEMA = {
+    "riego": "regar",
+    "fertilizacion": "fertilizar",
+    "siembra": "sembrar",
+    "cosecha": "cosechar",
+    "plagas": "aplicar",
+}
+
+_INTENCIONES_EDUCATIVAS = frozenset({
+    "consulta_evitar_riego",
+    "consulta_evitar_fertilizacion",
+    "consulta_plagas_prevencion",
+    "consulta_plagas_zona",
+    "consulta_epocas_siembra",
+})
+
+
+def _usar_modo_focalizado(texto: str | None, intencion: str | None) -> bool:
+    """Respuesta corta y específica por cultivo/tema; educativas mantienen detalle."""
+    if intencion in _INTENCIONES_EDUCATIVAS or intencion == "consulta_multiple":
+        return False
+    return True
+
+
+def _bloque_clima_tema(condiciones: dict, tema: str) -> list[str]:
+    claves = _CLAVE_CLIMA_POR_TEMA.get(tema, [])
+    lineas: list[str] = []
+    for campo, etiqueta in claves:
+        valor = condiciones.get(campo)
+        if valor is not None:
+            unidad = "%" if "pct" in campo else ("°C" if "temp" in campo else (" km/h" if "viento" in campo else ""))
+            lineas.append(f"• {etiqueta}: {_fmt(valor, unidad)}")
+    return lineas or _bloque_clima(condiciones)[:3]
+
+
+def _referencia_cultivo_tema(tema: str, cultivo: str) -> str:
+    nombre = _nombre_cultivo(cultivo)
+    if tema == "riego":
+        info = RIEGO.get(cultivo, RIEGO["soya"])
+        return (
+            f"Referencia {nombre}: etapas críticas {', '.join(info['critico_etapas'])}. "
+            f"Mejor horario: {info['mejor_horario']}."
+        )
+    if tema == "fertilizacion":
+        info = FERTILIZACION.get(cultivo, FERTILIZACION["soya"])
+        return f"Referencia {nombre}: {info['momentos'][0]} Productos: {info['productos_referencia']}."
+    if tema == "siembra":
+        info = SIEMBRA.get(cultivo, SIEMBRA["soya"])
+        return (
+            f"Referencia {nombre}: ventana {info['ventana']}, profundidad {info['profundidad_cm']} cm, "
+            f"densidad {info['densidad']}."
+        )
+    if tema == "cosecha":
+        info = COSECHA.get(cultivo, COSECHA["soya"])
+        return (
+            f"Referencia {nombre}: humedad objetivo de grano {info['humedad_grano_objetivo_pct']}%. "
+            f"Señal clave: {info['indicadores'][0]}"
+        )
+    if tema == "plagas":
+        plagas = PLAGAS_POR_CULTIVO.get(cultivo, [])
+        if plagas:
+            nombres = ", ".join(p["nombre"] for p in plagas[:3])
+            return f"Plagas frecuentes en {nombre}: {nombres}."
+        return f"Monitoreo fitosanitario en {nombre}: recorrida semanal antes de aplicar."
+    return ""
+
+
+def _armar_explicacion_por_tema(
+    tema: str,
+    cultivo: str,
+    condiciones: dict,
+    advertencias: list[dict],
+    semaforo: str,
+    texto: str | None,
+) -> str:
+    nombre = _nombre_cultivo(cultivo)
+    titulo = TIPOS_EVALUACION.get(tema, tema)
+    accion = _ACCION_POR_TEMA.get(tema, "avanzar")
+
+    if texto and texto.strip():
+        intro = f"Respondiendo tu consulta sobre {titulo} de {nombre}."
+    else:
+        intro = f"Evaluación de {titulo} para {nombre} en base al clima actual."
+
+    partes = [intro, "", "Condiciones relevantes:"]
+    partes.extend(_bloque_clima_tema(condiciones, tema))
+
+    ref = _referencia_cultivo_tema(tema, cultivo)
+    if ref:
+        partes.extend(["", ref])
+
+    if advertencias:
+        partes.extend(["", "Alerta principal:", f"• {advertencias[0]['mensaje']}"])
+
+    partes.extend(["", _ventana_sugerida(semaforo, condiciones, accion=accion)])
+    return "\n".join(partes)
+
+
 def _bloque_advertencias(advertencias: list[dict]) -> list[str]:
     if not advertencias:
         return ["• No hay alertas críticas según los umbrales configurados."]
@@ -364,16 +490,23 @@ def _finalizar(
     exp: str,
     fragmentos: list[FragmentoConocimiento],
     fuentes: list[str],
+    *,
+    focalizado: bool = False,
 ) -> tuple[str, str]:
-    rec = _recortar(rec, 260)
+    rec = _recortar(rec, 300 if focalizado else 260)
     if fragmentos and fuentes:
         doc_fuente = next((f for f in fuentes if "clima" not in f.lower()), None)
         if doc_fuente and doc_fuente not in rec:
-            rec = _recortar(f"{rec} (Ref: {_recortar(doc_fuente, 80)})", 300)
-    if _bloque_kb(fragmentos) not in exp:
-        exp += _bloque_kb(fragmentos)
+            rec = _recortar(f"{rec} (Ref: {_recortar(doc_fuente, 80)})", 320)
+    if not focalizado:
+        if _bloque_kb(fragmentos) not in exp:
+            exp += _bloque_kb(fragmentos)
+    elif fragmentos:
+        kb_corto = _bloque_kb(fragmentos[:1])
+        if kb_corto and kb_corto not in exp:
+            exp += kb_corto
     if _pie_fuentes(fuentes) not in exp:
-        exp += _pie_fuentes(fuentes)
+        exp += _pie_fuentes(fuentes[:3] if focalizado else fuentes)
     return rec, exp
 
 
@@ -486,6 +619,8 @@ def _responder_siembra(
     advertencias: list,
     ubicacion: str | None,
     texto: str | None,
+    *,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     info = SIEMBRA.get(cultivo, SIEMBRA["soya"])
     nombre = _nombre_cultivo(cultivo)
@@ -514,6 +649,12 @@ def _responder_siembra(
         else f"Entiendo tu consulta sobre siembra de {nombre}. Revisé el clima del lote en {zona}."
     )
 
+    if focalizado:
+        explicacion = _armar_explicacion_por_tema(
+            "siembra", cultivo, condiciones, advertencias, semaforo, texto
+        )
+        return recomendacion, explicacion
+
     explicacion = (
         f"{intro}\n\n"
         f"Lo que dice el clima ahora:\n"
@@ -541,6 +682,8 @@ def _responder_riego(
     advertencias: list,
     ubicacion: str | None,
     texto: str | None,
+    *,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     info = RIEGO.get(cultivo, RIEGO["soya"])
     nombre = _nombre_cultivo(cultivo)
@@ -573,6 +716,12 @@ def _responder_riego(
         if not texto
         else f"Entiendo tu consulta sobre riego de {nombre}. Cruzé el clima con referencias de manejo hídrico."
     )
+
+    if focalizado:
+        explicacion = _armar_explicacion_por_tema(
+            "riego", cultivo, condiciones, advertencias, semaforo, texto
+        )
+        return recomendacion, explicacion
 
     explicacion = (
         f"{intro}\n\n"
@@ -647,6 +796,8 @@ def _responder_fertilizacion(
     advertencias: list,
     ubicacion: str | None,
     texto: str | None,
+    *,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     info = FERTILIZACION.get(cultivo, FERTILIZACION["soya"])
     nombre = _nombre_cultivo(cultivo)
@@ -680,6 +831,12 @@ def _responder_fertilizacion(
         if not texto
         else f"Entiendo tu consulta sobre fertilización de {nombre}. Revisé lluvia, viento y suelo."
     )
+
+    if focalizado:
+        explicacion = _armar_explicacion_por_tema(
+            "fertilizacion", cultivo, condiciones, advertencias, semaforo, texto
+        )
+        return recomendacion, explicacion
 
     explicacion = (
         f"{intro}\n\n"
@@ -803,6 +960,8 @@ def _responder_cosecha(
     advertencias: list,
     ubicacion: str | None,
     texto: str | None,
+    *,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     info = COSECHA.get(cultivo, COSECHA["soya"])
     nombre = _nombre_cultivo(cultivo)
@@ -833,6 +992,12 @@ def _responder_cosecha(
         else f"Entiendo tu consulta sobre cuándo cosechar {nombre}. Analicé clima y referencias de punto de corte."
     )
 
+    if focalizado:
+        explicacion = _armar_explicacion_por_tema(
+            "cosecha", cultivo, condiciones, advertencias, semaforo, texto
+        )
+        return recomendacion, explicacion
+
     explicacion = (
         f"{intro}\n\n"
         f"Clima actual:\n"
@@ -859,6 +1024,7 @@ def _responder_fumigacion(
     producto: str | None,
     ubicacion: str | None,
     texto: str | None,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     nombre = _nombre_cultivo(cultivo)
     lugar = f" en {ubicacion}" if ubicacion else ""
@@ -890,6 +1056,14 @@ def _responder_fumigacion(
         if not texto
         else f"Entiendo tu consulta sobre aplicación de {producto_txt} en {nombre}. Revisé el clima del lote."
     )
+
+    if focalizado:
+        explicacion = _armar_explicacion_por_tema(
+            "plagas", cultivo, condiciones, advertencias, semaforo, texto
+        )
+        if producto:
+            explicacion = f"Producto evaluado: {producto}.\n\n{explicacion}"
+        return recomendacion, explicacion
 
     explicacion = (
         f"{intro}\n\n"
@@ -935,6 +1109,7 @@ def _generar_seccion_sub(
     ubicacion: str | None,
     texto: str | None,
     producto: str | None,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     if sub == "consulta_evitar_riego":
         return _responder_riego_evitar(cultivo, condiciones, ubicacion)
@@ -947,13 +1122,13 @@ def _generar_seccion_sub(
     if sub == "consulta_epocas_siembra":
         return _responder_peores_epocas_siembra(cultivo, condiciones, advertencias, ubicacion)
     if sub in ("consulta_ventana", "evaluacion_clima") and tema == "riego":
-        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if sub in ("consulta_ventana", "evaluacion_clima") and tema == "fertilizacion":
-        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if sub in ("consulta_ventana", "evaluacion_clima") and tema == "siembra":
-        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if sub in ("consulta_ventana", "evaluacion_clima") and tema == "cosecha":
-        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     return _generar_seccion_tema(
         tema,
         cultivo=cultivo,
@@ -964,6 +1139,7 @@ def _generar_seccion_sub(
         texto=texto,
         producto=producto,
         intencion=sub,
+        focalizado=focalizado,
     )
 
 
@@ -978,6 +1154,7 @@ def _generar_seccion_tema(
     texto: str | None,
     producto: str | None,
     intencion: str,
+    focalizado: bool = True,
 ) -> tuple[str, str]:
     """Genera recomendación y explicación para un solo tema."""
     sub = intencion
@@ -1001,13 +1178,13 @@ def _generar_seccion_tema(
         return _responder_peores_epocas_siembra(cultivo, condiciones, advertencias, ubicacion)
 
     if tema == "siembra":
-        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if tema == "riego":
-        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if tema == "fertilizacion":
-        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if tema == "cosecha":
-        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     if tema == "plagas":
         return _responder_fumigacion(
             cultivo=cultivo,
@@ -1017,6 +1194,7 @@ def _generar_seccion_tema(
             producto=producto,
             ubicacion=ubicacion,
             texto=texto,
+            focalizado=focalizado,
         )
 
     nombre = _nombre_cultivo(cultivo)
@@ -1056,6 +1234,7 @@ def generar_respuestas(
     frags = fragmentos or []
     cites = fuentes_conocimiento or []
     ev_por_tema = evaluaciones_por_tema or {}
+    focalizado = _usar_modo_focalizado(texto, intencion)
 
     # Mismo tema, varias sub-intenciones (ej. ¿conviene regar hoy? + qué NO hacer al regar)
     if texto and len(temas_consulta) == 1:
@@ -1066,6 +1245,7 @@ def generar_respuestas(
             partes_rec: list[str] = []
             partes_exp: list[str] = ["Tu consulta tiene más de un enfoque. Te respondo cada parte:\n"]
             for sub in subs:
+                sub_focal = focalizado and sub not in _INTENCIONES_EDUCATIVAS
                 rec_t, exp_t = _generar_seccion_sub(
                     tema,
                     sub,
@@ -1076,11 +1256,12 @@ def generar_respuestas(
                     ubicacion=ubicacion,
                     texto=texto,
                     producto=producto,
+                    focalizado=sub_focal,
                 )
                 titulo = _titulo_sub_intencion(tema, sub)
                 partes_rec.append(f"{titulo}: {_recortar(rec_t, 200)}")
                 partes_exp.append(f"—— {titulo} ——\n{exp_t}")
-            return _finalizar(" ".join(partes_rec), "\n\n".join(partes_exp), frags, cites)
+            return _finalizar(" ".join(partes_rec), "\n\n".join(partes_exp), frags, cites, focalizado=focalizado)
 
     # Consulta con varios temas (ej. plagas + siembra)
     if len(temas_consulta) > 1 or intencion == "consulta_multiple":
@@ -1102,6 +1283,7 @@ def generar_respuestas(
                 texto=texto,
                 producto=producto if tema == "plagas" else None,
                 intencion=sub_intencion,
+                focalizado=focalizado and sub_intencion not in _INTENCIONES_EDUCATIVAS,
             )
             titulo = TIPOS_EVALUACION.get(tema, tema).capitalize()
             partes_rec.append(f"{titulo}: {_recortar(rec_t, 200)}")
@@ -1109,36 +1291,36 @@ def generar_respuestas(
 
         rec = " ".join(partes_rec)
         exp = "\n\n".join(partes_exp)
-        return _finalizar(rec, exp, frags, cites)
+        return _finalizar(rec, exp, frags, cites, focalizado=focalizado)
 
     if intencion == "consulta_plagas_zona":
         rec, exp = _responder_plagas_zona(cultivo, ubicacion, condiciones)
-        return _finalizar(rec, exp, frags, cites)
+        return _finalizar(rec, exp, frags, cites, focalizado=False)
 
     if intencion == "consulta_plagas_prevencion":
         rec, exp = _responder_plagas_prevencion(cultivo, ubicacion, condiciones)
-        return _finalizar(rec, exp, frags, cites)
+        return _finalizar(rec, exp, frags, cites, focalizado=False)
 
     if intencion == "consulta_epocas_siembra":
         rec, exp = _responder_peores_epocas_siembra(cultivo, condiciones, advertencias, ubicacion)
-        return _finalizar(rec, exp, frags, cites)
+        return _finalizar(rec, exp, frags, cites, focalizado=False)
 
     if intencion == "consulta_evitar_fertilizacion":
         rec, exp = _responder_fertilizacion_evitar(cultivo, condiciones, ubicacion)
-        return _finalizar(rec, exp, frags, cites)
+        return _finalizar(rec, exp, frags, cites, focalizado=False)
 
     if intencion == "consulta_evitar_riego":
         rec, exp = _responder_riego_evitar(cultivo, condiciones, ubicacion)
-        return _finalizar(rec, exp, frags, cites)
+        return _finalizar(rec, exp, frags, cites, focalizado=False)
 
     if tipo_evaluacion == "siembra":
-        rec, exp = _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        rec, exp = _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     elif tipo_evaluacion == "riego":
-        rec, exp = _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        rec, exp = _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     elif tipo_evaluacion == "fertilizacion":
-        rec, exp = _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        rec, exp = _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     elif tipo_evaluacion == "cosecha":
-        rec, exp = _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+        rec, exp = _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto, focalizado=focalizado)
     elif tipo_evaluacion == "plagas":
         rec, exp = _responder_fumigacion(
             cultivo=cultivo,
@@ -1148,6 +1330,7 @@ def generar_respuestas(
             producto=producto,
             ubicacion=ubicacion,
             texto=texto,
+            focalizado=focalizado,
         )
     else:
         nombre = _nombre_cultivo(cultivo)
@@ -1161,7 +1344,7 @@ def generar_respuestas(
         hora = datetime.now().strftime("%H:%M")
         exp = (
             f"Consulta de {TIPOS_EVALUACION.get(tipo_evaluacion, tipo_evaluacion)} "
-            f"({hora}).\n\nClima:\n" + "\n".join(_bloque_clima(condiciones))
+            f"({hora}).\n\nClima:\n" + "\n".join(_bloque_clima_tema(condiciones, tipo_evaluacion))
         )
 
-    return _finalizar(rec, exp, frags, cites)
+    return _finalizar(rec, exp, frags, cites, focalizado=focalizado)
