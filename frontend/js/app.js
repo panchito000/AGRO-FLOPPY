@@ -93,14 +93,24 @@ function updateAudioStatus(message) {
   audioStatus.textContent = message;
 }
 
-function setRecordingUi(active) {
-  audioPanel?.classList.toggle("audio-panel--recording", active);
-  btnGrabar.classList.toggle("btn--recording", active);
+function setRecordingUi(active, phase) {
+  const isRecording = phase === "recording";
+  audioPanel?.classList.toggle("audio-panel--recording", isRecording);
+  btnGrabar.classList.toggle("btn--recording", isRecording);
   btnGrabar.disabled = active;
-  btnDetener.disabled = !active;
+  btnDetener.disabled = !active || phase === "processing";
   if (recordingIndicator) {
-    recordingIndicator.hidden = !active;
+    recordingIndicator.hidden = !isRecording;
   }
+}
+
+function resetSavedAudio() {
+  recordedBlob = null;
+  recordedMimeType = "audio/webm";
+  recordedExtension = ".webm";
+  audioFileInput.value = "";
+  btnLimpiarAudio.disabled = true;
+  setAudioPreview(null);
 }
 
 function setAudioPreview(blob) {
@@ -117,17 +127,12 @@ function setAudioPreview(blob) {
 }
 
 function clearAudio() {
-  if (audioRecorder?.isRecording()) {
+  if (audioRecorder?.isActive()) {
     audioRecorder.stop();
   }
 
-  recordedBlob = null;
-  recordedMimeType = "audio/webm";
-  recordedExtension = ".webm";
-  audioFileInput.value = "";
-  btnLimpiarAudio.disabled = true;
+  resetSavedAudio();
   setRecordingUi(false);
-  setAudioPreview(null);
   textoInput.classList.remove("form__textarea--dictating");
   updateAudioStatus("Sin audio seleccionado.");
 }
@@ -158,6 +163,13 @@ function initAudioRecorder() {
 
   audioRecorder = new ZafraAudioRecorder({
     onStatus: (message) => updateAudioStatus(message),
+    onStateChange: ({ isActive, isRecording, isProcessing }) => {
+      const phase = isRecording ? "recording" : (isProcessing ? "processing" : "requesting");
+      setRecordingUi(isActive, isActive ? phase : null);
+      if (!isActive) {
+        textoInput.classList.remove("form__textarea--dictating");
+      }
+    },
     onTranscript: ({ display, isRecording }) => {
       if (isRecording) {
         textoInput.value = display;
@@ -200,17 +212,16 @@ function startRecording() {
     return;
   }
 
-  if (audioRecorder.isRecording()) {
+  if (audioRecorder.isActive()) {
     return;
   }
 
-  clearAudio();
-  setRecordingUi(true);
+  resetSavedAudio();
   audioRecorder.start(textoInput.value.trim());
 }
 
 function stopRecording() {
-  if (!audioRecorder?.isRecording()) {
+  if (!audioRecorder?.isActive()) {
     return;
   }
   audioRecorder.stop();
@@ -380,7 +391,7 @@ audioFileInput.addEventListener("change", () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  if (audioRecorder?.isRecording()) {
+  if (audioRecorder?.isActive()) {
     showToast("Detené la grabación antes de analizar.", true);
     return;
   }

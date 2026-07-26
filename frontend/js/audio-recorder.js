@@ -1,6 +1,6 @@
 /**
  * Zafra AI — Grabación de audio + dictado en tiempo real (Web Speech API).
- * Compatible con móvil: mime types Safari/Chrome, gesto de usuario sin await previo.
+ * Grabar inicia el micrófono; Detener lo cierra. Sin auto-inicio ni estados ambiguos.
  */
 (function (global) {
   "use strict";
@@ -55,6 +55,7 @@
     this.onTranscript = options.onTranscript || function () {};
     this.onComplete = options.onComplete || function () {};
     this.onError = options.onError || function () {};
+    this.onStateChange = options.onStateChange || function () {};
 
     this._mediaRecorder = null;
     this._stream = null;
@@ -64,8 +65,9 @@
     this._baseText = "";
     this._finalText = "";
     this._interimText = "";
-    this._isRecording = false;
+    this._state = "idle"; // idle | requesting | recording | processing
     this._speechActive = false;
+    this._cancelRequested = false;
   }
 
   AudioRecorder.isRecordingSupported = function () {
@@ -85,6 +87,16 @@
   AudioRecorder.pickMimeType = pickMimeType;
   AudioRecorder.extensionForMime = extensionForMime;
 
+  AudioRecorder.prototype._setState = function (state) {
+    this._state = state;
+    this.onStateChange({
+      state,
+      isActive: state === "requesting" || state === "recording" || state === "processing",
+      isRecording: state === "recording",
+      isProcessing: state === "processing",
+    });
+  };
+
   AudioRecorder.prototype._emitTranscript = function () {
     const parts = [];
     if (this._baseText) parts.push(this._baseText);
@@ -94,13 +106,13 @@
       display: [committed, this._interimText].filter(Boolean).join(committed && this._interimText ? " " : ""),
       committed: committed.trim(),
       interim: this._interimText.trim(),
-      isRecording: this._isRecording,
+      isRecording: this._state === "recording",
     });
   };
 
   AudioRecorder.prototype._startSpeech = function () {
     const SpeechRecognition = getSpeechRecognition();
-    if (!SpeechRecognition) {
+    if (!SpeechRecognition || this._state !== "recording") {
       return false;
     }
 
@@ -112,6 +124,8 @@
       this._speech.maxAlternatives = 1;
 
       this._speech.onresult = (event) => {
+        if (this._state !== "recording") return;
+
         let interim = "";
         for (let i = event.resultIndex; i < event.results.length; i += 1) {
           const result = event.results[i];
@@ -137,7 +151,7 @@
       };
 
       this._speech.onend = () => {
-        if (this._isRecording && this._speechActive) {
+        if (this._state === "recording" && this._speechActive) {
           try {
             this._speech.start();
           } catch (_err) {
@@ -179,12 +193,26 @@
     }
   };
 
+  AudioRecorder.prototype._resetSession = function () {
+    this._mediaRecorder = null;
+    this._chunks = [];
+    this._mimeType = "";
+    this._cancelRequested = false;
+  };
+
+  AudioRecorder.prototype._finishCancelled = function () {
+    this._stopSpeech();
+    this._cleanupStream();
+    this._resetSession();
+    this._setState("idle");
+    this.onStatus("Grabación cancelada.");
+  };
+
   /**
-   * Iniciar grabación. Debe llamarse directamente desde un click (sin await previo).
-   * @param {string} baseText Texto existente en notas antes de grabar.
+   * Iniciar grabación al pulsar Grabar (llamar desde click, sin await previo).
    */
   AudioRecorder.prototype.start = function (baseText) {
-    if (this._isRecording) {
+    if (this._state === "requesting" || this._state === "recording" || this._state === "processing") {
       return;
     }
 
@@ -201,6 +229,10 @@
     this._interimText = "";
     this._chunks = [];
     this._mimeType = pickMimeType();
+    this._cancelRequested = false;
+
+    this._setState("requesting");
+    this.onStatus("Solicitando micrófono…");
 
     const constraints = {
       audio: {
@@ -213,6 +245,12 @@
     navigator.mediaDevices
       .getUserMedia(constraints)
       .then((stream) => {
+        if (this._cancelRequested) {
+          stream.getTracks().forEach((track) => track.stop());
+          this._finishCancelled();
+          return;
+        }
+
         this._stream = stream;
         const options = this._mimeType ? { mimeType: this._mimeType } : undefined;
 
@@ -238,7 +276,8 @@
           const mime = this._mimeType || this._mediaRecorder?.mimeType || "audio/webm";
           const blob = new Blob(this._chunks, { type: mime });
           this._cleanupStream();
-          this._isRecording = false;
+          this._resetSession();
+          this._setState("idle");
           this.onComplete({
             blob,
             mimeType: mime,
@@ -251,20 +290,27 @@
           this.stop();
         });
 
-        this._isRecording = true;
-        this._mediaRecorder.start(1000);
+        if (this._cancelRequested) {
+          this._finishCancelled();
+          return;
+        }
+
+        this._setState("recording");
+        this._mediaRecorder.start(250);
 
         const speechStarted = this._startSpeech();
         if (speechStarted) {
-          this.onStatus("Escuchando… el texto aparece en Notas mientras hablás.");
+          this.onStatus("Grabando… el texto aparece en Notas mientras hablás.");
         } else {
-          this.onStatus("Grabando audio… escribí en Notas si tu celular no dicta en vivo.");
+          this.onStatus("Grabando audio… tocá Detener cuando termines.");
         }
         this._emitTranscript();
       })
       .catch((error) => {
         this._cleanupStream();
-        this._isRecording = false;
+        this._resetSession();
+        this._setState("idle");
+
         const name = error?.name || "";
         if (name === "NotAllowedError" || name === "PermissionDeniedError") {
           this.onError("Permiso de micrófono denegado. Activá el micrófono en ajustes del navegador.");
@@ -276,30 +322,50 @@
       });
   };
 
+  /** Detener grabación al pulsar Detener. */
   AudioRecorder.prototype.stop = function () {
-    if (!this._isRecording && !this._mediaRecorder) {
+    if (this._state === "idle") {
       return;
     }
 
+    if (this._state === "requesting") {
+      this._cancelRequested = true;
+      this._finishCancelled();
+      return;
+    }
+
+    if (this._state === "processing") {
+      return;
+    }
+
+    this._setState("processing");
     this._stopSpeech();
+    this.onStatus("Guardando grabación…");
 
     if (this._mediaRecorder && this._mediaRecorder.state !== "inactive") {
       try {
+        this._mediaRecorder.requestData();
         this._mediaRecorder.stop();
       } catch (_err) {
         this._cleanupStream();
-        this._isRecording = false;
+        this._resetSession();
+        this._setState("idle");
+        this.onError("No se pudo guardar la grabación.");
       }
-    } else {
-      this._cleanupStream();
-      this._isRecording = false;
+      return;
     }
 
-    this.onStatus("Procesando grabación…");
+    this._cleanupStream();
+    this._resetSession();
+    this._setState("idle");
   };
 
   AudioRecorder.prototype.isRecording = function () {
-    return this._isRecording;
+    return this._state === "recording";
+  };
+
+  AudioRecorder.prototype.isActive = function () {
+    return this._state === "requesting" || this._state === "recording" || this._state === "processing";
   };
 
   AudioRecorder.prototype.getCommittedText = function () {
