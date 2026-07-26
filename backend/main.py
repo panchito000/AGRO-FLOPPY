@@ -7,7 +7,7 @@ from app.config import settings
 from app.routes import evaluar_router, health_router
 
 app = FastAPI(
-    title="Zafra AI API",
+    title="AgroFloppy API",
     description="Copiloto inteligente para decisiones agronómicas en soya y maíz.",
     version="0.1.0",
     root_path=settings.root_path,

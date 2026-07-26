@@ -7,4 +7,4 @@ router = APIRouter(tags=["Health"])
 
 @router.get("/")
 def health_check():
-    return {"status": "ok", "message": "Zafra AI API funcionando"}
+    return {"status": "ok", "message": "AgroFloppy API funcionando"}

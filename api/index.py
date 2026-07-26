@@ -10,5 +10,5 @@ sys.path.insert(0, str(backend_dir))
 
 from main import app as core_app
 
-app = FastAPI(title="AGRO-FLOPPY Gateway", docs_url=None, redoc_url=None)
+app = FastAPI(title="AgroFloppy Gateway", docs_url=None, redoc_url=None)
 app.mount("/api", core_app)
