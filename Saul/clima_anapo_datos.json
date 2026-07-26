@@ -1,0 +1,302 @@
+[
+  {
+    "location_id": "103904906",
+    "type": "P.PPLA",
+    "navi": false,
+    "language": "es",
+    "country_id": "bo",
+    "longitude": -63.1812,
+    "latitude": -17.7863,
+    "timezone": "America/La_Paz",
+    "adm_name": "Departamento de Santa Cruz",
+    "name": "Santa Cruz de la Sierra",
+    "country_name": "Bolivia",
+    "update_time": "2026-07-25T15:57:07",
+    "update_time_utc": "2026-07-25T19:57:07Z",
+    "nowcast": {
+      "symb": "d300",
+      "temp": 24,
+      "windd": 330,
+      "winds": 5,
+      "winds_max": 12
+    },
+    "daily": [
+      {
+        "time": "2026-07-25T12:00:00",
+        "temp_min": 17,
+        "temp_max": 25,
+        "symb": "d300"
+      },
+      {
+        "time": "2026-07-26T12:00:00",
+        "temp_min": 21,
+        "temp_max": 28,
+        "symb": "d220"
+      },
+      {
+        "time": "2026-07-27T12:00:00",
+        "temp_min": 22,
+        "temp_max": 29,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-28T12:00:00",
+        "temp_min": 22,
+        "temp_max": 29,
+        "symb": "d220"
+      },
+      {
+        "time": "2026-07-29T12:00:00",
+        "temp_min": 23,
+        "temp_max": 29,
+        "symb": "d220"
+      },
+      {
+        "time": "2026-07-30T12:00:00",
+        "temp_min": 22,
+        "temp_max": 28,
+        "symb": "d220"
+      }
+    ]
+  },
+  {
+    "location_id": "108335389",
+    "type": "P.PPL",
+    "navi": true,
+    "language": "es",
+    "country_id": "bo",
+    "longitude": -62.5589,
+    "latitude": -17.2672,
+    "timezone": "America/La_Paz",
+    "adm_name": "Departamento de Santa Cruz",
+    "name": "Cuatro Cañadas",
+    "country_name": "Bolivia",
+    "update_time": "2026-07-25T15:57:10",
+    "update_time_utc": "2026-07-25T19:57:10Z",
+    "nowcast": {
+      "symb": "d000",
+      "temp": 29,
+      "windd": 329,
+      "winds": 4,
+      "winds_max": 8
+    },
+    "daily": [
+      {
+        "time": "2026-07-25T12:00:00",
+        "temp_min": 18,
+        "temp_max": 29,
+        "symb": "d000"
+      },
+      {
+        "time": "2026-07-26T12:00:00",
+        "temp_min": 21,
+        "temp_max": 32,
+        "symb": "d000"
+      },
+      {
+        "time": "2026-07-27T12:00:00",
+        "temp_min": 22,
+        "temp_max": 32,
+        "symb": "d000"
+      },
+      {
+        "time": "2026-07-28T12:00:00",
+        "temp_min": 25,
+        "temp_max": 32,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-29T12:00:00",
+        "temp_min": 25,
+        "temp_max": 32,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-30T12:00:00",
+        "temp_min": 22,
+        "temp_max": 31,
+        "symb": "d220"
+      }
+    ]
+  },
+  {
+    "location_id": "103905453",
+    "type": "P.PPL",
+    "navi": false,
+    "language": "en",
+    "country_id": "bo",
+    "longitude": -62.8667,
+    "latitude": -17.7833,
+    "timezone": "America/La_Paz",
+    "adm_name": "Departamento de Santa Cruz",
+    "name": "San Julian",
+    "country_name": "Bolivia",
+    "update_time": "2026-07-25T15:57:11",
+    "update_time_utc": "2026-07-25T19:57:11Z",
+    "nowcast": {
+      "symb": "d400",
+      "temp": 27,
+      "windd": 337,
+      "winds": 6,
+      "winds_max": 11
+    },
+    "daily": [
+      {
+        "time": "2026-07-25T12:00:00",
+        "temp_min": 18,
+        "temp_max": 28,
+        "symb": "d300"
+      },
+      {
+        "time": "2026-07-26T12:00:00",
+        "temp_min": 21,
+        "temp_max": 30,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-27T12:00:00",
+        "temp_min": 22,
+        "temp_max": 30,
+        "symb": "d100"
+      },
+      {
+        "time": "2026-07-28T12:00:00",
+        "temp_min": 23,
+        "temp_max": 30,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-29T12:00:00",
+        "temp_min": 23,
+        "temp_max": 30,
+        "symb": "d220"
+      },
+      {
+        "time": "2026-07-30T12:00:00",
+        "temp_min": 21,
+        "temp_max": 29,
+        "symb": "d220"
+      }
+    ]
+  },
+  {
+    "location_id": "103905658",
+    "type": "P.PPL",
+    "navi": false,
+    "language": "es",
+    "country_id": "bo",
+    "longitude": -60.95,
+    "latitude": -16.3667,
+    "timezone": "America/La_Paz",
+    "adm_name": "Departamento de Santa Cruz",
+    "name": "San Ignacio de Velasco",
+    "country_name": "Bolivia",
+    "update_time": "2026-07-25T15:57:12",
+    "update_time_utc": "2026-07-25T19:57:12Z",
+    "nowcast": {
+      "symb": "d000",
+      "temp": 33,
+      "windd": 337,
+      "winds": 3,
+      "winds_max": 7
+    },
+    "daily": [
+      {
+        "time": "2026-07-25T12:00:00",
+        "temp_min": 19,
+        "temp_max": 33,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-26T12:00:00",
+        "temp_min": 20,
+        "temp_max": 33,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-27T12:00:00",
+        "temp_min": 21,
+        "temp_max": 34,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-28T12:00:00",
+        "temp_min": 22,
+        "temp_max": 33,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-29T12:00:00",
+        "temp_min": 23,
+        "temp_max": 33,
+        "symb": "d220"
+      },
+      {
+        "time": "2026-07-30T12:00:00",
+        "temp_min": 22,
+        "temp_max": 32,
+        "symb": "d210"
+      }
+    ]
+  },
+  {
+    "location_id": "103909360",
+    "type": "P.PPL",
+    "navi": false,
+    "language": "es",
+    "country_id": "bo",
+    "longitude": -62.8167,
+    "latitude": -17.2333,
+    "timezone": "America/La_Paz",
+    "adm_name": "Departamento de Santa Cruz",
+    "name": "Okinawa Número Uno",
+    "country_name": "Bolivia",
+    "update_time": "2026-07-25T15:57:12",
+    "update_time_utc": "2026-07-25T19:57:12Z",
+    "nowcast": {
+      "symb": "d000",
+      "temp": 29,
+      "windd": 320,
+      "winds": 4,
+      "winds_max": 8
+    },
+    "daily": [
+      {
+        "time": "2026-07-25T12:00:00",
+        "temp_min": 19,
+        "temp_max": 29,
+        "symb": "d100"
+      },
+      {
+        "time": "2026-07-26T12:00:00",
+        "temp_min": 21,
+        "temp_max": 31,
+        "symb": "d000"
+      },
+      {
+        "time": "2026-07-27T12:00:00",
+        "temp_min": 23,
+        "temp_max": 32,
+        "symb": "d000"
+      },
+      {
+        "time": "2026-07-28T12:00:00",
+        "temp_min": 24,
+        "temp_max": 31,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-29T12:00:00",
+        "temp_min": 24,
+        "temp_max": 31,
+        "symb": "d210"
+      },
+      {
+        "time": "2026-07-30T12:00:00",
+        "temp_min": 22,
+        "temp_max": 31,
+        "symb": "d220"
+      }
+    ]
+  }
+]

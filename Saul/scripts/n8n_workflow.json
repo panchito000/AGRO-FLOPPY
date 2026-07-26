@@ -1,0 +1,150 @@
+{
+  "name": "Zafra - Verificador Climático Agrícola",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "zafra-check",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-001",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [200, 300],
+      "webhookId": "zafra-check"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.open-meteo.com/v1/forecast",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "latitude", "value": "={{ $json.body.latitude }}" },
+            { "name": "longitude", "value": "={{ $json.body.longitude }}" },
+            { "name": "current", "value": "temperature_2m,relative_humidity_2m,wind_speed_10m,wind_direction_10m,precipitation,rain,weather_code,cloud_cover,uv_index" },
+            { "name": "hourly", "value": "temperature_2m,relative_humidity_2m,wind_speed_10m,precipitation_probability,precipitation,soil_temperature_0cm,soil_moisture_0_to_1cm" },
+            { "name": "daily", "value": "temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,uv_index_max,et0_fao_evapotranspiration,sunrise,sunset,daylight_duration" },
+            { "name": "timezone", "value": "America/La_Paz" },
+            { "name": "forecast_days", "value": "7" }
+          ]
+        },
+        "options": { "timeout": 15000 }
+      },
+      "id": "openmeteo-001",
+      "name": "Fetch Open-Meteo",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 200]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://wttr.in/{{ $json.body.latitude }},{{ $json.body.longitude }}?format=j1",
+        "options": {
+          "timeout": 15000,
+          "response": { "response": { "fullResponse": false } }
+        }
+      },
+      "id": "wttr-001",
+      "name": "Fetch wttr.in",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [480, 400]
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combinationMode": "mergeByPosition",
+        "options": {}
+      },
+      "id": "merge-001",
+      "name": "Merge Weather Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3,
+      "position": [720, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst webhookData = $('Webhook Trigger').first().json.body;\n\n// === UMBRALES POR PRODUCTO (sistema conservador) ===\nconst PRODUCTOS = {\n  'glifosato': { viento_max: 16, temp_min: 10, temp_max: 30, humedad_min: 55, rainfast: 2, riesgo_deriva: 'medio' },\n  '2,4-d': { viento_max: 15, temp_min: 10, temp_max: 25, humedad_min: 55, rainfast: 1, riesgo_deriva: 'alto' },\n  'dicamba': { viento_max: 12, temp_min: 10, temp_max: 29, humedad_min: 55, rainfast: 3, riesgo_deriva: 'muy_alto' },\n  'fomesafen': { viento_max: 16, temp_min: 15, temp_max: 30, humedad_min: 60, rainfast: 2, riesgo_deriva: 'medio' },\n  'elatus': { viento_max: 15, temp_min: 15, temp_max: 30, humedad_min: 60, rainfast: 2, riesgo_deriva: 'bajo' },\n  'fox_xpro': { viento_max: 15, temp_min: 10, temp_max: 30, humedad_min: 55, rainfast: 2, riesgo_deriva: 'bajo' },\n  'bumper': { viento_max: 15, temp_min: 10, temp_max: 30, humedad_min: 55, rainfast: 2, riesgo_deriva: 'bajo' },\n  'lambda_cialotrina': { viento_max: 24, temp_min: 10, temp_max: 32, humedad_min: 50, rainfast: 2, riesgo_deriva: 'medio', restriccion_inversion: true },\n  'metomil': { viento_max: 16, temp_min: 15, temp_max: 32, humedad_min: 50, rainfast: 4, riesgo_deriva: 'medio', restringido: true },\n  'bt': { viento_max: 15, temp_min: 15, temp_max: 30, humedad_min: 60, rainfast: 4, riesgo_deriva: 'bajo' },\n};\n\n// === CONDICIONES SIEMBRA ===\nconst CONDICIONES_SIEMBRA = {\n  'soya': { temp_suelo_min: 10, humedad_suelo_min: 50, lluvia_min_7d: 10 },\n  'maiz': { temp_suelo_min: 10, humedad_suelo_min: 50, lluvia_min_7d: 15 },\n};\n\n// === EXTRAER DATOS DE OPEN-METEO ===\nlet openMeteo = null;\nfor (const item of items) {\n  const d = item.json;\n  if (d.current && d.current.temperature_2m !== undefined) {\n    openMeteo = {\n      temperatura: d.current.temperature_2m,\n      humedad: d.current.relative_humidity_2m,\n      viento: d.current.wind_speed_10m,\n      viento_dir: d.current.wind_direction_10m,\n      precipitacion: d.current.precipitation || 0,\n      nubosidad: d.current.cloud_cover,\n      uv: d.current.uv_index,\n      temp_suelo: d.hourly?.soil_temperature_0cm?.[0] || null,\n      humedad_suelo: d.hourly?.soil_moisture_0_to_1cm?.[0] || null,\n      pronostico_horas: []\n    };\n    for (let i = 0; i < Math.min(6, d.hourly?.time?.length || 0); i++) {\n      openMeteo.pronostico_horas.push({\n        hora: d.hourly.time[i],\n        viento: d.hourly.wind_speed_10m?.[i],\n        prob_lluvia: d.hourly.precipitation_probability?.[i] || 0,\n        temp: d.hourly.temperature_2m?.[i]\n      });\n    }\n    break;\n  }\n}\n\n// === EXTRAER DATOS DE WTTR ===\nlet wttr = null;\nfor (const item of items) {\n  const d = item.json;\n  if (d.current_condition && d.current_condition[0]) {\n    const c = d.current_condition[0];\n    wttr = {\n      temperatura: parseFloat(c.temp_C),\n      humedad: parseFloat(c.humidity),\n      viento: parseFloat(c.windspeedKmph),\n      uv: parseFloat(c.uvIndex),\n      precipitacion: parseFloat(c.precipMM),\n      nubosidad: parseFloat(c.cloudcover)\n    };\n    break;\n  }\n}\n\n// === PROMEDIAR FUENTES ===\nconst promedio = (campo) => {\n  const vals = [];\n  if (openMeteo && openMeteo[campo] !== null && openMeteo[campo] !== undefined) vals.push(openMeteo[campo]);\n  if (wttr && wttr[campo] !== null && wttr[campo] !== undefined) vals.push(wttr[campo]);\n  if (vals.length === 0) return null;\n  return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10;\n};\n\nconst condiciones = {\n  temperatura_c: promedio('temperatura'),\n  humedad_pct: promedio('humedad'),\n  viento_kmh: promedio('viento'),\n  uv_index: promedio('uv'),\n  precipitacion_mm: promedio('precipitacion'),\n  nubosidad_pct: promedio('nubosidad'),\n  temp_suelo_c: openMeteo?.temp_suelo || null,\n  humedad_suelo_pct: openMeteo?.humedad_suelo || null,\n};\n\n// Prob lluvia 6h del pronóstico\nlet prob_lluvia_6h = 0;\nif (openMeteo?.pronostico_horas) {\n  const probs = openMeteo.pronostico_horas.map(h => h.prob_lluvia || 0);\n  prob_lluvia_6h = Math.max(...probs);\n}\n\n// === DETECCIÓN INVERSIÓN TÉRMICA (heurística) ===\nconst ahora = new Date();\nconst horaLocal = ahora.getHours();\nconst esHorarioPeligroso = horaLocal >= 17 || horaLocal <= 7;\nconst vientoCalmo = condiciones.viento_kmh < 3;\nconst cieloDespejado = (condiciones.nubosidad_pct || 100) < 30;\nconst inversionTermica = esHorarioPeligroso && vientoCalmo && cieloDespejado;\n\n// === EVALUAR FUMIGACIÓN ===\nconst accion = webhookData.accion || 'fumigar';\nconst producto = webhookData.producto || '';\nconst cultivo = webhookData.cultivo || '';\n\nlet veredicto = '';\nlet semaforo = '';\nlet advertencias = [];\nlet umbrales_aplicados = {};\n\nif (accion === 'fumigar' && producto) {\n  const prod = PRODUCTOS[producto.toLowerCase().replace(/ /g, '_')];\n  if (prod) {\n    umbrales_aplicados = {\n      producto: producto,\n      viento_max_kmh: prod.viento_max,\n      temp_min_c: prod.temp_min,\n      temp_max_c: prod.temp_max,\n      humedad_min_pct: prod.humedad_min,\n      rainfast_horas: prod.rainfast\n    };\n\n    if (condiciones.viento_kmh > prod.viento_max)\n      advertencias.push({ tipo: 'viento', severidad: 'alta', mensaje: `Viento ${condiciones.viento_kmh} km/h excede máximo ${prod.viento_max} km/h para ${producto}` });\n    if (condiciones.temperatura_c < prod.temp_min)\n      advertencias.push({ tipo: 'temp_baja', severidad: 'alta', mensaje: `Temperatura ${condiciones.temperatura_c}°C por debajo del mínimo ${prod.temp_min}°C` });\n    if (condiciones.temperatura_c > prod.temp_max)\n      advertencias.push({ tipo: 'temp_alta', severidad: 'alta', mensaje: `Temperatura ${condiciones.temperatura_c}°C excede máximo ${prod.temp_max}°C` });\n    if (condiciones.humedad_pct < prod.humedad_min)\n      advertencias.push({ tipo: 'humedad_baja', severidad: 'media', mensaje: `Humedad ${condiciones.humedad_pct}% por debajo del mínimo ${prod.humedad_min}%` });\n    if (prob_lluvia_6h > 30)\n      advertencias.push({ tipo: 'lluvia', severidad: 'alta', mensaje: `Probabilidad de lluvia ${prob_lluvia_6h}% - riesgo de lavado del producto` });\n    if (inversionTermica)\n      advertencias.push({ tipo: 'inversion_termica', severidad: 'alta', mensaje: 'Riesgo de inversión térmica detectado (viento calmo + horario peligroso + cielo despejado)' });\n    if (prod.restriccion_inversion)\n      advertencias.push({ tipo: 'restriccion', severidad: 'critica', mensaje: `${producto} tiene restricción explícita: NO aplicar durante inversiones térmicas` });\n    if (prod.restringido)\n      advertencias.push({ tipo: 'legal', severidad: 'critica', mensaje: `${producto} es de uso RESTRINGIDO en Bolivia. Requiere receta SENASAG.` });\n  } else {\n    advertencias.push({ tipo: 'producto_no_encontrado', severidad: 'alta', mensaje: `Producto '${producto}' no encontrado en la base de datos` });\n  }\n} else if (accion === 'sembrar' && cultivo) {\n  const cond = CONDICIONES_SIEMBRA[cultivo.toLowerCase()];\n  if (cond) {\n    umbrales_aplicados = {\n      cultivo: cultivo,\n      temp_suelo_min: cond.temp_suelo_min,\n      humedad_suelo_min: cond.humedad_suelo_min,\n      lluvia_min_7dias: cond.lluvia_min_7d\n    };\n    if (condiciones.temp_suelo_c !== null && condiciones.temp_suelo_c < cond.temp_suelo_min)\n      advertencias.push({ tipo: 'temp_suelo_baja', severidad: 'alta', mensaje: `Temperatura suelo ${condiciones.temp_suelo_c}°C por debajo del mínimo ${cond.temp_suelo_min}°C` });\n    if (condiciones.humedad_suelo_pct !== null && condiciones.humedad_suelo_pct < cond.humedad_suelo_min)\n      advertencias.push({ tipo: 'humedad_suelo_baja', severidad: 'alta', mensaje: `Humedad suelo ${condiciones.humedad_suelo_pct}% por debajo del mínimo ${cond.humedad_suelo_min}%` });\n  }\n}\n\n// === SEMÁFORO ===\nconst criticas = advertencias.filter(a => a.severidad === 'alta' || a.severidad === 'critica');\nconst medias = advertencias.filter(a => a.severidad === 'media');\n\nif (criticas.length > 0) {\n  veredicto = accion === 'fumigar' ? 'NO_SEGURO' : 'DESFAVORABLE';\n  semaforo = 'rojo';\n} else if (medias.length > 0) {\n  veredicto = accion === 'fumigar' ? 'PRECAUCION' : 'MARGINAL';\n  semaforo = 'amarillo';\n} else {\n  veredicto = accion === 'fumigar' ? 'SEGURO' : 'FAVORABLE';\n  semaforo = 'verde';\n}\n\n// === RECOMENDACIÓN ===\nlet recomendacion = '';\nif (semaforo === 'rojo') {\n  const principal = advertencias[0];\n  recomendacion = `No ${accion === 'fumigar' ? 'fumbiques' : 'siembres'} hoy. ${principal?.mensaje || ''}. `;\n  if (openMeteo?.pronostico_horas?.length > 0) {\n    const mejorHora = openMeteo.pronostico_horas.find(h => h.viento < 10 && h.prob_lluvia < 20);\n    if (mejorHora) recomendacion += `Mejor ventana: ${mejorHora.hora}.`;\n  }\n} else if (semaforo === 'amarillo') {\n  recomendacion = `Precaución: ${advertencias.map(a => a.mensaje).join('. ')}. Considere esperar.`;\n} else {\n  recomendacion = accion === 'fumigar'\n    ? `Condiciones favorables para fumigar. Viento ${condiciones.viento_kmh} km/h, temperatura ${condiciones.temperatura_c}°C, humedad ${condiciones.humedad_pct}%.`\n    : `Condiciones favorables para sembrar ${cultivo}. Temperatura suelo ${condiciones.temp_suelo_c || 'N/A'}°C.`;\n}\n\nreturn [{\n  json: {\n    success: true,\n    timestamp: new Date().toISOString(),\n    ubicacion: {\n      lat: webhookData.latitude,\n      lon: webhookData.longitude\n    },\n    accion_evaluada: accion,\n    producto_evaluado: producto || null,\n    cultivo_evaluado: cultivo || null,\n    veredicto: veredicto,\n    semaforo: semaforo,\n    condiciones_actuales: condiciones,\n    pronostico_6h: {\n      prob_lluvia_max_pct: prob_lluvia_6h,\n      horas: openMeteo?.pronostico_horas || []\n    },\n    umbrales_aplicados: umbrales_aplicados,\n    advertencias: advertencias,\n    inversion_termica_detectada: inversionTermica,\n    recomendacion: recomendacion,\n    fuentes_usadas: [openMeteo ? 'openmeteo' : null, wttr ? 'wttr' : null].filter(Boolean)\n  }\n}];"
+      },
+      "id": "code-001",
+      "name": "Analyze & Decide",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [960, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200,
+          "responseHeaders": {
+            "entries": [
+              { "name": "Content-Type", "value": "application/json" },
+              { "name": "Access-Control-Allow-Origin", "value": "*" }
+            ]
+          }
+        }
+      },
+      "id": "respond-001",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1200, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          { "node": "Fetch Open-Meteo", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Fetch wttr.in", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch Open-Meteo": {
+      "main": [
+        [
+          { "node": "Merge Weather Data", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Fetch wttr.in": {
+      "main": [
+        [
+          { "node": "Merge Weather Data", "type": "main", "index": 1 }
+        ]
+      ]
+    },
+    "Merge Weather Data": {
+      "main": [
+        [
+          { "node": "Analyze & Decide", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Analyze & Decide": {
+      "main": [
+        [
+          { "node": "Respond to Webhook", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "zafra" },
+    { "name": "agricultura" },
+    { "name": "clima" }
+  ]
+}
