@@ -61,6 +61,20 @@ FERTILIZACION = {
         ],
         "productos_referencia": "MAP/DAP al surco; micronutrientes (Mo, B) según análisis.",
         "evitar": "Fertilizar justo antes de lluvia fuerte (>25 mm) — lixiviación.",
+        "peores_practicas": [
+            "Fertilizar justo antes de lluvia fuerte (>25 mm): se pierde N y P por lixiviación.",
+            "Aplicar urea foliar en mediodía con >32°C: quemaduras foliares y volatilización de N.",
+            "Abonar sin análisis de suelo: exceso de N genera vegetativo sin rendimiento.",
+            "Mezclar productos incompatibles en tanque: precipitación o pérdida de eficacia.",
+            "Fertilizar con suelo encharcado: raíces asfixiadas y menor absorción.",
+            "Aplicar N en exceso post-R1: más hojas, menos grano en vaina.",
+        ],
+        "cuando_no": [
+            "48 h antes de lluvias intensas previstas.",
+            "Con viento >20 km/h (deriva en aplicaciones foliares).",
+            "Suelo saturado o encharcado.",
+            "Horas de máximo calor si usás productos foliares o urea.",
+        ],
     },
     "maiz": {
         "momentos": [
@@ -70,6 +84,18 @@ FERTILIZACION = {
         ],
         "productos_referencia": "Urea granulada, MAP, KCl según análisis de suelo.",
         "evitar": "Aplicación foliar de urea en horas de calor (>32°C).",
+        "peores_practicas": [
+            "Aplicar urea foliar en horas de calor (>32°C): quemaduras y volatilización.",
+            "Fertilizar justo antes de lluvia fuerte: lixiviación de N.",
+            "Una sola dosis de N al inicio: estrés en VT y menor rendimiento.",
+            "Abonar sin análisis: desbalance N-P-K y encarecimiento sin beneficio.",
+            "Aplicar sobre suelo seco sin incorporar: N volatiliza antes de absorberse.",
+        ],
+        "cuando_no": [
+            "Antes de lluvias fuertes (>25 mm en pronóstico).",
+            "Con viento alto en aplicaciones foliares.",
+            "Suelo muy seco sin fertirriego o incorporación.",
+        ],
     },
 }
 

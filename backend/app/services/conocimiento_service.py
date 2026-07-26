@@ -172,6 +172,33 @@ def _buscar_en_db(
     return _buscar_en_lista(chunks, cultivo=cultivo, tipo_evaluacion=tipo_evaluacion, texto=texto, limit=limit)
 
 
+def buscar_conocimiento_multi(
+    *,
+    cultivo: str,
+    tipos_evaluacion: list[str],
+    texto: str | None = None,
+    db: Session | None = None,
+    limit_por_tipo: int = 2,
+) -> list[FragmentoConocimiento]:
+    """Busca fragmentos para varios temas en una misma consulta."""
+    vistos: set[str] = set()
+    resultados: list[FragmentoConocimiento] = []
+    for tipo in tipos_evaluacion:
+        for fr in buscar_conocimiento(
+            cultivo=cultivo,
+            tipo_evaluacion=tipo,
+            texto=texto,
+            db=db,
+            limit=limit_por_tipo,
+        ):
+            clave = fr.contenido[:100]
+            if clave in vistos:
+                continue
+            vistos.add(clave)
+            resultados.append(fr)
+    return resultados[:8]
+
+
 def buscar_conocimiento(
     *,
     cultivo: str,

@@ -13,8 +13,12 @@ from app.services.clima.datos_agronomicos import (
     evaluar_fumigacion,
     evaluar_siembra,
 )
-from app.services.conocimiento_service import buscar_conocimiento, formatear_fuentes, fuentes_clima
-from app.services.respuestas_agronomicas import detectar_intencion, generar_respuestas
+from app.services.conocimiento_service import (
+    buscar_conocimiento_multi,
+    formatear_fuentes,
+    fuentes_clima,
+)
+from app.services.respuestas_agronomicas import detectar_intencion, detectar_temas, generar_respuestas
 
 if TYPE_CHECKING:
     from sqlalchemy.orm import Session
@@ -243,6 +247,51 @@ def _aplicar_evaluacion(resultado: dict, evaluacion: dict, *, error_tipo: str = 
             resultado["producto_evaluado"] = evaluacion["producto"]
 
 
+def _evaluar_tema(
+    tema: str,
+    cultivo: str,
+    condiciones: dict,
+    texto: str | None,
+) -> dict:
+    """Evalúa reglas agronómicas para un tema específico."""
+    if tema == "plagas":
+        producto = _detectar_producto(texto)
+        if producto:
+            ev = evaluar_fumigacion(producto, condiciones)
+            if ev.get("error"):
+                return {
+                    "veredicto": "NO_APLICA",
+                    "semaforo": "rojo",
+                    "advertencias": [{"tipo": "producto", "severidad": "alta", "mensaje": ev["error"]}],
+                }
+            return {
+                "veredicto": ev["veredicto"],
+                "semaforo": ev["semaforo"],
+                "advertencias": ev.get("advertencias", []),
+                "producto_evaluado": ev.get("producto"),
+            }
+        return {"veredicto": "INFORMATIVO", "semaforo": "amarillo", "advertencias": []}
+
+    evaluadores = {
+        "siembra": lambda: evaluar_siembra(cultivo, condiciones),
+        "riego": lambda: _evaluar_riego(condiciones),
+        "fertilizacion": lambda: _evaluar_fertilizacion(condiciones),
+        "cosecha": lambda: _evaluar_cosecha(condiciones),
+    }
+    ev = evaluadores.get(tema, lambda: evaluar_siembra(cultivo, condiciones))()
+    if ev.get("error"):
+        return {
+            "veredicto": "NO_APLICA",
+            "semaforo": "rojo",
+            "advertencias": [{"tipo": tema, "severidad": "alta", "mensaje": ev["error"]}],
+        }
+    return {
+        "veredicto": ev["veredicto"],
+        "semaforo": ev["semaforo"],
+        "advertencias": ev.get("advertencias", []),
+    }
+
+
 def evaluar_agronomico(
     *,
     cultivo: str,
@@ -256,6 +305,7 @@ def evaluar_agronomico(
     """Combina clima en vivo con reglas agronómicas de Saul."""
     clima = obtener_clima_consolidado(lat, lon)
     condiciones = clima["condiciones_unificadas"]
+    temas = detectar_temas(texto, tipo_evaluacion)
     intencion = detectar_intencion(texto, tipo_evaluacion)
 
     resultado = {
@@ -268,6 +318,7 @@ def evaluar_agronomico(
         "recomendacion": None,
         "explicacion": None,
         "intencion_detectada": intencion,
+        "temas_detectados": temas,
     }
 
     if not clima["fuentes_usadas"]:
@@ -286,38 +337,26 @@ def evaluar_agronomico(
         )
         return resultado
 
-    producto = None
-    if intencion == "consulta_plagas_zona":
-        resultado["veredicto"] = "INFORMATIVO"
-        resultado["semaforo"] = "amarillo"
-        resultado["advertencias"] = []
-    elif tipo_evaluacion == "plagas":
-        producto = _detectar_producto(texto)
-        if producto:
-            _aplicar_evaluacion(resultado, evaluar_fumigacion(producto, condiciones), error_tipo="producto")
-        else:
-            intencion = "consulta_plagas_zona"
-            resultado["intencion_detectada"] = intencion
-            resultado["veredicto"] = "INFORMATIVO"
-            resultado["semaforo"] = "amarillo"
-            resultado["advertencias"] = []
-    elif tipo_evaluacion == "siembra":
-        _aplicar_evaluacion(resultado, evaluar_siembra(cultivo, condiciones), error_tipo="cultivo")
-    elif tipo_evaluacion == "riego":
-        _aplicar_evaluacion(resultado, _evaluar_riego(condiciones))
-    elif tipo_evaluacion == "fertilizacion":
-        _aplicar_evaluacion(resultado, _evaluar_fertilizacion(condiciones))
-    elif tipo_evaluacion == "cosecha":
-        _aplicar_evaluacion(resultado, _evaluar_cosecha(condiciones))
-    else:
-        _aplicar_evaluacion(resultado, evaluar_siembra(cultivo, condiciones), error_tipo="cultivo")
+    evaluaciones_por_tema: dict[str, dict] = {}
+    for tema in temas:
+        evaluaciones_por_tema[tema] = _evaluar_tema(tema, cultivo, condiciones, texto)
 
-    fragmentos = buscar_conocimiento(
+    # Resultado principal = primer tema del formulario o el más restrictivo
+    ev_principal = evaluaciones_por_tema.get(tipo_evaluacion) or evaluaciones_por_tema[temas[0]]
+    resultado["veredicto"] = ev_principal.get("veredicto", "INFORMATIVO")
+    resultado["semaforo"] = ev_principal.get("semaforo", "amarillo")
+    resultado["advertencias"] = ev_principal.get("advertencias", [])
+    if ev_principal.get("producto_evaluado"):
+        resultado["producto_evaluado"] = ev_principal["producto_evaluado"]
+
+    producto = _detectar_producto(texto) if "plagas" in temas else None
+
+    fragmentos = buscar_conocimiento_multi(
         cultivo=cultivo,
-        tipo_evaluacion=tipo_evaluacion,
+        tipos_evaluacion=temas,
         texto=texto,
         db=db,
-        limit=3,
+        limit_por_tipo=2,
     )
     fuentes_info = formatear_fuentes(
         fuentes_clima_list=fuentes_clima(clima["fuentes_usadas"]),
@@ -338,6 +377,8 @@ def evaluar_agronomico(
         intencion=resultado.get("intencion_detectada"),
         fragmentos=fragmentos,
         fuentes_conocimiento=fuentes_info,
+        temas=temas,
+        evaluaciones_por_tema=evaluaciones_por_tema,
     )
     resultado["fuentes_conocimiento"] = fuentes_info
     resultado["clima_completo"] = clima
