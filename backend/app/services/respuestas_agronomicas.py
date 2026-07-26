@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 
+from app.data.conocimiento_agronomico import COSECHA, FERTILIZACION, RIEGO, SIEMBRA
 from app.data.plagas_zona import PLAGAS_POR_CULTIVO, ZONAS_SANTA_CRUZ
 from app.services.clima.datos_agronomicos import PRODUCTOS, buscar_producto
 
@@ -16,13 +17,7 @@ TIPOS_EVALUACION = {
     "cosecha": "cosecha",
 }
 
-ACCIONES = {
-    "siembra": "sembrar",
-    "fertilizacion": "fertilizar",
-    "riego": "registrar riego o activar el sistema",
-    "plagas": "aplicar el producto fitosanitario",
-    "cosecha": "iniciar cosecha",
-}
+CULTIVO_NOMBRE = {"soya": "soya", "maiz": "maíz"}
 
 
 def detectar_intencion(texto: str | None, tipo_evaluacion: str) -> str:
@@ -67,272 +62,393 @@ def _coincide(texto: str, *patrones: str) -> bool:
     return any(re.search(p, texto) for p in patrones)
 
 
-def _saludo_contexto(cultivo: str, tipo: str, ubicacion: str | None) -> str:
-    lugar = f" en {ubicacion}" if ubicacion else " en la zona seleccionada"
-    return f"Para {cultivo}{lugar}, revisé el clima y tu consulta de {TIPOS_EVALUACION.get(tipo, tipo)}."
+def _nombre_cultivo(cultivo: str) -> str:
+    return CULTIVO_NOMBRE.get(cultivo, cultivo)
 
 
-def _ventana_sugerida(semaforo: str, condiciones: dict) -> str:
+def _zona_descripcion(ubicacion: str | None) -> str:
+    if not ubicacion:
+        return ZONAS_SANTA_CRUZ["default"]
+    u = ubicacion.lower()
+    if any(x in u for x in ("san julián", "cuatro cañadas", "okinawa")):
+        return ZONAS_SANTA_CRUZ["norte"]
+    if any(x in u for x in ("san ignacio", "pailón", "pailon")):
+        return ZONAS_SANTA_CRUZ["este"]
+    if any(x in u for x in ("charagua", "boyuibe", "camiri")):
+        return ZONAS_SANTA_CRUZ["sur"]
+    return ZONAS_SANTA_CRUZ["default"]
+
+
+def _fmt(valor, unidad: str = "", fallback: str = "sin dato") -> str:
+    if valor is None:
+        return fallback
+    return f"{valor}{unidad}"
+
+
+def _bloque_clima(condiciones: dict) -> list[str]:
+    return [
+        f"• Temperatura: {_fmt(condiciones.get('temperatura_c'), '°C')}",
+        f"• Humedad relativa: {_fmt(condiciones.get('humedad_pct'), '%')}",
+        f"• Viento: {_fmt(condiciones.get('viento_kmh'), ' km/h')}",
+        f"• Probabilidad de lluvia: {_fmt(condiciones.get('prob_lluvia_pct'), '%')}",
+        f"• Temperatura del suelo: {_fmt(condiciones.get('temp_suelo_c'), '°C')}",
+        f"• Humedad del suelo: {_fmt(condiciones.get('humedad_suelo_pct'), '%')}",
+    ]
+
+
+def _bloque_advertencias(advertencias: list[dict]) -> list[str]:
+    if not advertencias:
+        return ["• No hay alertas críticas según los umbrales configurados."]
+    return [f"• {a['mensaje']}" for a in advertencias[:4]]
+
+
+def _ventana_sugerida(semaforo: str, condiciones: dict, *, accion: str = "avanzar") -> str:
     viento = condiciones.get("viento_kmh")
-    prob_lluvia = condiciones.get("prob_lluvia_pct", 0)
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
     temp = condiciones.get("temperatura_c")
 
     if semaforo == "verde":
         return (
-            "Podés avanzar hoy, preferentemente en las primeras horas de la mañana "
-            "(6:00–10:00) cuando el viento suele ser más estable."
+            f"Podés {accion} hoy, idealmente en la mañana (6:00–10:00) "
+            "cuando el clima suele ser más estable."
         )
     if semaforo == "amarillo":
         return (
-            "Si las condiciones no mejoran, considerá reprogramar para mañana temprano "
-            "o cuando baje la probabilidad de lluvia y el viento quede entre 5 y 15 km/h."
+            f"Si no {accion} hoy, reprogramá para mañana temprano o cuando "
+            "baje la lluvia y el viento quede en rango moderado (5–15 km/h)."
         )
-    partes = ["Por ahora conviene esperar."]
+
+    partes = [f"Por ahora conviene esperar antes de {accion}."]
     if viento and viento > 15:
-        partes.append(f"El viento ({viento} km/h) debería bajar por debajo de 15 km/h.")
-    if prob_lluvia and prob_lluvia > 30:
-        partes.append(f"Esperá a que la probabilidad de lluvia ({prob_lluvia}%) baje de 30%.")
+        partes.append(f"Esperá a que el viento baje de {viento} km/h.")
+    if prob_lluvia > 30:
+        partes.append(f"Esperá a que la probabilidad de lluvia ({prob_lluvia}%) baje.")
     if temp and temp > 32:
-        partes.append("Evitá aplicar en horas de máximo calor; mejor al amanecer o al atardecer.")
+        partes.append("Evitá las horas de máximo calor; preferí madrugada o atardecer.")
     if len(partes) == 1:
-        partes.append("Revisá el pronóstico en 24–48 h antes de confirmar la operación.")
+        partes.append("Revisá el pronóstico en 24–48 h antes de confirmar.")
     return " ".join(partes)
 
 
 def _responder_plagas_zona(cultivo: str, ubicacion: str | None, condiciones: dict) -> tuple[str, str]:
     plagas = PLAGAS_POR_CULTIVO.get(cultivo, [])
-    zona = ZONAS_SANTA_CRUZ["default"]
-    if ubicacion:
-        u = ubicacion.lower()
-        if any(x in u for x in ("san julián", "cuatro cañadas", "okinawa")):
-            zona = ZONAS_SANTA_CRUZ["norte"]
-        elif any(x in u for x in ("san ignacio", "pailón", "pailon")):
-            zona = ZONAS_SANTA_CRUZ["este"]
+    zona = _zona_descripcion(ubicacion)
+    nombre = _nombre_cultivo(cultivo)
 
     if not plagas:
-        rec = "No tengo un catálogo de plagas cargado para este cultivo."
-        exp = "Consultá con un agrónomo de la zona para un relevamiento de campo."
-        return rec, exp
+        return (
+            "No tengo un catálogo de plagas para este cultivo.",
+            "Consultá con un agrónomo local para un relevamiento en campo.",
+        )
 
     nombres = [p["nombre"] for p in plagas[:5]]
     humedad = condiciones.get("humedad_pct")
     temp = condiciones.get("temperatura_c")
 
     recomendacion = (
-        f"En {zona}, para {cultivo} las plagas y enfermedades más frecuentes son: "
+        f"En {zona}, para {nombre} las plagas más frecuentes son: "
         f"{'; '.join(nombres)}. "
-        "Te sugiero un monitoreo semanal en el lote antes de aplicar cualquier producto."
+        "Te recomiendo un monitoreo semanal en el lote antes de aplicar cualquier producto."
     )
-
     if humedad and humedad > 70 and temp and 20 <= temp <= 28:
         recomendacion += (
-            " Con la humedad y temperatura actuales, hay mayor riesgo de enfermedades fúngicas "
-            "(roya/sigatoka); priorizá revisar el envés de las hojas."
+            " Con la humedad actual hay mayor riesgo de enfermedades fúngicas; "
+            "revisá el envés de las hojas."
         )
 
-    detalle = []
-    for p in plagas[:4]:
-        detalle.append(
-            f"• {p['nombre']} ({p['tipo']}): {p['sintomas']} "
-            f"Monitoreo: {p['monitoreo']}"
-        )
+    detalle = [
+        f"• {p['nombre']} ({p['tipo']}): {p['sintomas']} Monitoreo: {p['monitoreo']}"
+        for p in plagas[:4]
+    ]
 
     explicacion = (
-        f"Entiendo que querés saber qué plagas podés encontrar en esta zona. "
-        f"Según referencias agronómicas de Santa Cruz para {cultivo}, esto es lo más habitual:\n\n"
+        f"Entiendo que querés saber qué plagas podés encontrar en esta zona.\n\n"
+        f"Para {nombre} en Santa Cruz, lo más habitual es:\n\n"
         + "\n".join(detalle)
-        + "\n\nEsta es información orientativa. Confirmá presencia en campo antes de tratar."
+        + "\n\nConfirmá presencia en campo antes de tratar. Zafra AI complementa, no reemplaza, al agrónomo."
     )
     return recomendacion, explicacion
 
 
-def _responder_riego(cultivo: str, semaforo: str, condiciones: dict, advertencias: list) -> tuple[str, str]:
-    humedad_suelo = condiciones.get("humedad_suelo_pct")
-    prob_lluvia = condiciones.get("prob_lluvia_pct", 0)
-    temp = condiciones.get("temperatura_c")
-
-    if humedad_suelo is not None and humedad_suelo >= 60:
-        rec = (
-            f"El suelo muestra buena humedad ({humedad_suelo}%). "
-            "No hace falta regar ahora; monitoreá en 2–3 días o si el cultivo muestra estrés."
-        )
-    elif prob_lluvia and prob_lluvia > 40:
-        rec = (
-            f"Hay {prob_lluvia}% de probabilidad de lluvia. "
-            "Conviene esperar: la lluvia podría cubrir el déficit hídrico sin gastar agua."
-        )
-    elif semaforo == "verde" or (humedad_suelo is not None and humedad_suelo < 50):
-        rec = (
-            f"Sí podrías regar {cultivo} en las próximas 24 h, "
-            "preferentemente al amanecer o al atardecer para reducir evaporación."
-        )
-    else:
-        rec = (
-            "Las condiciones no son claras para un riego urgente. "
-            "Revisá el suelo a 15–20 cm de profundidad antes de decidir."
-        )
-
-    exp = (
-        f"Para riego de {cultivo} analicé humedad de suelo, temperatura y pronóstico. "
-        f"Humedad suelo: {humedad_suelo if humedad_suelo is not None else 'sin dato'}%, "
-        f"temp {temp}°C, prob. lluvia {prob_lluvia}%. "
-    )
-    if advertencias:
-        exp += "Observaciones: " + "; ".join(a["mensaje"] for a in advertencias[:2]) + "."
-    else:
-        exp += "No hay alertas críticas de clima para una decisión de riego inmediata."
-    return rec, exp
-
-
-def _responder_fertilizacion(cultivo: str, semaforo: str, condiciones: dict) -> tuple[str, str]:
-    prob_lluvia = condiciones.get("prob_lluvia_pct", 0)
-    viento = condiciones.get("viento_kmh")
-    humedad_suelo = condiciones.get("humedad_suelo_pct")
-
-    if prob_lluvia > 30:
-        rec = (
-            f"Mejor esperar a fertilizar {cultivo}: hay {prob_lluvia}% de lluvia prevista "
-            "y podrías perder nutrientes por lixiviación."
-        )
-        ventana = "Aplicá cuando pasen 48 h sin lluvias fuertes y el suelo esté en capacidad de campo."
-    elif viento and viento > 18:
-        rec = (
-            f"Podés fertilizar, pero el viento ({viento} km/h) complica granulados volatilizados. "
-            "Preferí aplicación al suelo con suelo húmedo o fertirriego."
-        )
-        ventana = "Ventana más segura: mañana temprano con viento bajo."
-    elif semaforo == "verde":
-        rec = (
-            f"Sí, es un buen momento para fertilizar {cultivo}. "
-            "El suelo y el clima están dentro de rangos aceptables."
-        )
-        ventana = "Aplicá en horas frescas; si usás foliares, evitá mediodía."
-    else:
-        rec = (
-            f"Fertilizar {cultivo} es posible con precaución. "
-            "Confirmá humedad de suelo antes de aplicar."
-        )
-        ventana = _ventana_sugerida(semaforo, condiciones)
-
-    exp = (
-        f"Para fertilización de {cultivo} consideré lluvia ({prob_lluvia}%), "
-        f"viento ({viento} km/h) y humedad de suelo "
-        f"({humedad_suelo if humedad_suelo is not None else 'sin dato'}%). "
-        f"{ventana}"
-    )
-    return rec, exp
-
-
-def _responder_cosecha(cultivo: str, semaforo: str, condiciones: dict) -> tuple[str, str]:
-    prob_lluvia = condiciones.get("prob_lluvia_pct", 0)
-    humedad = condiciones.get("humedad_pct")
-
-    if prob_lluvia > 50:
-        rec = (
-            f"Conviene esperar para cosechar {cultivo}: lluvia probable ({prob_lluvia}%) "
-            "sube humedad de grano y complica secado."
-        )
-    elif semaforo == "verde" and humedad and humedad < 80:
-        rec = (
-            f"Sí podés avanzar con la cosecha de {cultivo} si el grano en campo "
-            "está en 13–14% de humedad (confirmá con medidor)."
-        )
-    else:
-        rec = (
-            f"Evaluá cosecha de {cultivo} lote por lote. "
-            "Si hay lluvia cercana, priorizá lotes más maduros o con mayor riesgo de pérdida."
-        )
-
-    exp = (
-        f"Para cosecha de {cultivo} el clima actual muestra humedad relativa {humedad}%, "
-        f"prob. lluvia {prob_lluvia}%. "
-        "La decisión final depende de humedad de grano en mazorca/vaina y pronóstico de 48 h."
-    )
-    return rec, exp
-
-
-def _responder_siembra(cultivo: str, semaforo: str, condiciones: dict, advertencias: list) -> tuple[str, str]:
+def _responder_siembra(
+    cultivo: str,
+    semaforo: str,
+    condiciones: dict,
+    advertencias: list,
+    ubicacion: str | None,
+    texto: str | None,
+) -> tuple[str, str]:
+    info = SIEMBRA.get(cultivo, SIEMBRA["soya"])
+    nombre = _nombre_cultivo(cultivo)
+    zona = _zona_descripcion(ubicacion)
     temp_suelo = condiciones.get("temp_suelo_c")
     humedad_suelo = condiciones.get("humedad_suelo_pct")
 
     if semaforo == "verde":
-        rec = (
-            f"Sí, las condiciones son favorables para sembrar {cultivo}. "
-            f"Suelo a {temp_suelo}°C con humedad adecuada."
+        recomendacion = (
+            f"Sí, es buen momento para sembrar {nombre}. "
+            f"El suelo está a {_fmt(temp_suelo, '°C')} con {_fmt(humedad_suelo, '%')} de humedad. "
+            "Podés avanzar en las próximas 24–48 h si el pronóstico se mantiene."
         )
-        ventana = "Podés avanzar en las próximas 24–48 h si el pronóstico se mantiene estable."
     elif semaforo == "amarillo":
-        rec = (
-            f"Podés sembrar {cultivo} con precaución, pero hay factores marginales. "
-            "Asegurate de que no haya heladas en los próximos días."
+        recomendacion = (
+            f"Podés sembrar {nombre} con precaución. Hay condiciones marginales — "
+            "confirmá que no haya heladas ni lluvias intensas en los próximos días."
         )
-        ventana = _ventana_sugerida(semaforo, condiciones)
     else:
         principal = advertencias[0]["mensaje"] if advertencias else "condiciones desfavorables"
-        rec = f"Por ahora no conviene sembrar {cultivo}. {principal}"
-        ventana = _ventana_sugerida(semaforo, condiciones)
+        recomendacion = (
+            f"Por ahora no conviene sembrar {nombre}. {principal} "
+            + _ventana_sugerida(semaforo, condiciones, accion="sembrar")
+        )
 
-    exp = (
-        f"Para siembra de {cultivo} el suelo está a {temp_suelo if temp_suelo is not None else '—'}°C "
-        f"y {humedad_suelo if humedad_suelo is not None else '—'}% de humedad. "
-        f"{ventana}"
+    intro = (
+        f"Revisé las condiciones de siembra para {nombre} en {zona}."
+        if not texto
+        else f"Entiendo tu consulta sobre siembra de {nombre}. Revisé el clima del lote en {zona}."
     )
-    return rec, exp
+
+    explicacion = (
+        f"{intro}\n\n"
+        f"Lo que dice el clima ahora:\n"
+        + "\n".join(_bloque_clima(condiciones))
+        + f"\n\nReferencia agronómica para {nombre}:\n"
+        f"• Ventana habitual: {info['ventana']}\n"
+        f"• Profundidad recomendada: {info['profundidad_cm']} cm\n"
+        f"• Temp. suelo ideal: {info['temp_suelo_ideal_c']}\n"
+        f"• Humedad suelo ideal: {info['humedad_suelo_ideal_pct']}\n"
+        f"• Densidad referencia: {info['densidad']}\n\n"
+        f"Puntos clave:\n"
+        + "\n".join(f"• {p}" for p in info["puntos_clave"])
+        + "\n\n"
+        f"Alertas del momento:\n"
+        + "\n".join(_bloque_advertencias(advertencias))
+        + f"\n\n{_ventana_sugerida(semaforo, condiciones, accion='sembrar')}"
+    )
+    return recomendacion, explicacion
+
+
+def _responder_riego(
+    cultivo: str,
+    semaforo: str,
+    condiciones: dict,
+    advertencias: list,
+    ubicacion: str | None,
+    texto: str | None,
+) -> tuple[str, str]:
+    info = RIEGO.get(cultivo, RIEGO["soya"])
+    nombre = _nombre_cultivo(cultivo)
+    humedad_suelo = condiciones.get("humedad_suelo_pct")
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+
+    if humedad_suelo is not None and humedad_suelo >= 65:
+        recomendacion = (
+            f"No hace falta regar {nombre} ahora: el suelo tiene buena humedad ({humedad_suelo}%). "
+            "Monitoreá en 2–3 días o si ves signos de estrés en las hojas."
+        )
+    elif prob_lluvia > 40:
+        recomendacion = (
+            f"Conviene esperar antes de regar: hay {prob_lluvia}% de probabilidad de lluvia. "
+            "La precipitación podría cubrir el déficit sin gastar agua."
+        )
+    elif semaforo == "verde" or (humedad_suelo is not None and humedad_suelo < 50):
+        recomendacion = (
+            f"Sí, podrías regar {nombre} en las próximas 24 h. "
+            f"Mejor horario: {info['mejor_horario']}."
+        )
+    else:
+        recomendacion = (
+            f"Antes de regar {nombre}, revisá el suelo a 15–20 cm. "
+            "Si está seco y el cultivo muestra estrés, podés regar al amanecer."
+        )
+
+    intro = (
+        f"Analicé si conviene regar {nombre} según el clima actual."
+        if not texto
+        else f"Entiendo tu consulta sobre riego de {nombre}. Cruzé el clima con referencias de manejo hídrico."
+    )
+
+    explicacion = (
+        f"{intro}\n\n"
+        f"Condiciones actuales:\n"
+        + "\n".join(_bloque_clima(condiciones))
+        + f"\n\nEtapas críticas de {nombre} para riego:\n"
+        + "\n".join(f"• {e}" for e in info["critico_etapas"])
+        + "\n\nSignos de que el cultivo necesita agua:\n"
+        + "\n".join(f"• {s}" for s in info["signos_estres"])
+        + f"\n\nReferencia de frecuencia: {info['frecuencia_referencia']}\n\n"
+        f"Observaciones:\n"
+        + "\n".join(_bloque_advertencias(advertencias))
+        + f"\n\n{_ventana_sugerida(semaforo, condiciones, accion='regar')}"
+    )
+    return recomendacion, explicacion
+
+
+def _responder_fertilizacion(
+    cultivo: str,
+    semaforo: str,
+    condiciones: dict,
+    advertencias: list,
+    ubicacion: str | None,
+    texto: str | None,
+) -> tuple[str, str]:
+    info = FERTILIZACION.get(cultivo, FERTILIZACION["soya"])
+    nombre = _nombre_cultivo(cultivo)
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+    viento = condiciones.get("viento_kmh")
+
+    if prob_lluvia > 30:
+        recomendacion = (
+            f"Mejor esperar para fertilizar {nombre}: hay {prob_lluvia}% de lluvia prevista "
+            "y podrías perder nutrientes por lixiviación. "
+            "Aplicá cuando pasen 48 h sin lluvias fuertes."
+        )
+    elif viento and viento > 18:
+        recomendacion = (
+            f"Podés fertilizar {nombre}, pero con viento de {viento} km/h conviene "
+            "aplicación al suelo con humedad o fertirriego, preferentemente mañana temprano."
+        )
+    elif semaforo == "verde":
+        recomendacion = (
+            f"Sí, es buen momento para fertilizar {nombre}. "
+            "Clima y suelo están en rangos aceptables. Aplicá en horas frescas."
+        )
+    else:
+        recomendacion = (
+            f"Podés fertilizar {nombre} con precaución. "
+            "Confirmá humedad de suelo y evitá mediodía si usás productos foliares."
+        )
+
+    intro = (
+        f"Evalué si las condiciones climáticas favorecen una fertilización de {nombre}."
+        if not texto
+        else f"Entiendo tu consulta sobre fertilización de {nombre}. Revisé lluvia, viento y suelo."
+    )
+
+    explicacion = (
+        f"{intro}\n\n"
+        f"Clima ahora:\n"
+        + "\n".join(_bloque_clima(condiciones))
+        + f"\n\nMomentos clave de fertilización en {nombre}:\n"
+        + "\n".join(f"• {m}" for m in info["momentos"])
+        + f"\n\nProductos de referencia: {info['productos_referencia']}\n"
+        f"Evitar: {info['evitar']}\n\n"
+        f"Alertas:\n"
+        + "\n".join(_bloque_advertencias(advertencias))
+        + f"\n\n{_ventana_sugerida(semaforo, condiciones, accion='fertilizar')}"
+    )
+    return recomendacion, explicacion
+
+
+def _responder_cosecha(
+    cultivo: str,
+    semaforo: str,
+    condiciones: dict,
+    advertencias: list,
+    ubicacion: str | None,
+    texto: str | None,
+) -> tuple[str, str]:
+    info = COSECHA.get(cultivo, COSECHA["soya"])
+    nombre = _nombre_cultivo(cultivo)
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+    humedad = condiciones.get("humedad_pct")
+
+    if prob_lluvia > 50:
+        recomendacion = (
+            f"Conviene esperar para cosechar {nombre}: lluvia probable ({prob_lluvia}%) "
+            "sube humedad de grano y complica secado. "
+            "Priorizá lotes más maduros si la ventana se achica."
+        )
+    elif semaforo == "verde":
+        recomendacion = (
+            f"Sí podés avanzar con la cosecha de {nombre} si el grano en campo "
+            f"está cerca de {info['humedad_grano_objetivo_pct']}% de humedad. "
+            "Confirmá con medidor de humedad antes de entrar."
+        )
+    else:
+        recomendacion = (
+            f"Evaluá la cosecha de {nombre} lote por lote. "
+            "Si no llueve en 48 h y el grano está en punto, podés avanzar con precaución."
+        )
+
+    intro = (
+        f"Revisé las condiciones climáticas para decidir cosecha de {nombre}."
+        if not texto
+        else f"Entiendo tu consulta sobre cuándo cosechar {nombre}. Analicé clima y referencias de punto de corte."
+    )
+
+    explicacion = (
+        f"{intro}\n\n"
+        f"Clima actual:\n"
+        + "\n".join(_bloque_clima(condiciones))
+        + f"\n\nSeñales de que el {nombre} está listo:\n"
+        + "\n".join(f"• {i}" for i in info["indicadores"])
+        + f"\n\nHumedad objetivo de grano: {info['humedad_grano_objetivo_pct']}%\n\n"
+        f"Riesgos a considerar:\n"
+        + "\n".join(f"• {r}" for r in info["riesgos"])
+        + f"\n\nEquipo: {info['equipo']}\n\n"
+        f"Alertas del momento:\n"
+        + "\n".join(_bloque_advertencias(advertencias))
+        + f"\n\n{_ventana_sugerida(semaforo, condiciones, accion='cosechar')}"
+    )
+    return recomendacion, explicacion
 
 
 def _responder_fumigacion(
     *,
     cultivo: str,
     semaforo: str,
-    veredicto: str,
     condiciones: dict,
     advertencias: list,
     producto: str | None,
     ubicacion: str | None,
     texto: str | None,
 ) -> tuple[str, str]:
-    accion = ACCIONES["plagas"]
+    nombre = _nombre_cultivo(cultivo)
     lugar = f" en {ubicacion}" if ubicacion else ""
-    producto_txt = producto or "el producto seleccionado"
+    producto_txt = producto or "el producto fitosanitario"
 
     if semaforo == "verde":
-        rec = (
-            f"Sí podés {accion} ({producto_txt}){lugar}. "
-            f"Clima favorable: {condiciones.get('temperatura_c')}°C, "
-            f"viento {condiciones.get('viento_kmh')} km/h, "
-            f"humedad {condiciones.get('humedad_pct')}%."
+        recomendacion = (
+            f"Sí podés aplicar {producto_txt} en {nombre}{lugar}. "
+            f"Clima favorable: {_fmt(condiciones.get('temperatura_c'), '°C')}, "
+            f"viento {_fmt(condiciones.get('viento_kmh'), ' km/h')}, "
+            f"humedad {_fmt(condiciones.get('humedad_pct'), '%')}. "
+            "Ventana ideal: mañana 6:00–10:00."
         )
-        ventana = "Ventana ideal: mañana temprano (6:00–10:00) con viento entre 5 y 15 km/h."
     elif semaforo == "amarillo":
-        rec = (
-            f"Podés {accion} con precaución. Hay condiciones marginales para {producto_txt}{lugar}. "
-            + (advertencias[0]["mensaje"] if advertencias else "")
+        detalle = advertencias[0]["mensaje"] if advertencias else "condiciones marginales"
+        recomendacion = (
+            f"Podés aplicar {producto_txt} con precaución en {nombre}{lugar}. {detalle} "
+            "Si podés, reprogramá para mañana temprano."
         )
-        ventana = _ventana_sugerida(semaforo, condiciones)
     else:
         principal = advertencias[0]["mensaje"] if advertencias else "condiciones desfavorables"
-        rec = f"No conviene {accion} hoy. {principal}"
-        ventana = _ventana_sugerida(semaforo, condiciones)
-
-    exp_partes = [
-        f"Evalué si es buen momento para aplicar {producto_txt} en {cultivo}{lugar}.",
-        (
-            f"Ahora hay {condiciones.get('temperatura_c')}°C, "
-            f"viento {condiciones.get('viento_kmh')} km/h, "
-            f"humedad {condiciones.get('humedad_pct')}% "
-            f"y {condiciones.get('prob_lluvia_pct')}% de probabilidad de lluvia."
-        ),
-        ventana,
-    ]
-    if advertencias:
-        exp_partes.append(
-            "Detalle técnico: " + "; ".join(a["mensaje"] for a in advertencias[:3]) + "."
+        recomendacion = (
+            f"No conviene aplicar {producto_txt} hoy en {nombre}{lugar}. {principal} "
+            + _ventana_sugerida(semaforo, condiciones, accion="aplicar")
         )
-    if texto and "?" in texto:
-        exp_partes.insert(1, "Respondiendo a tu consulta: el clima de hoy " +
-                         ("permite" if semaforo == "verde" else "no favorece" if semaforo == "rojo" else "permite con cuidado") +
-                         " una aplicación.")
-    return rec, " ".join(exp_partes)
+
+    intro = (
+        f"Evalué si es buen momento para aplicar {producto_txt} en {nombre}{lugar}."
+        if not texto
+        else f"Entiendo tu consulta sobre aplicación de {producto_txt} en {nombre}. Revisé el clima del lote."
+    )
+
+    explicacion = (
+        f"{intro}\n\n"
+        f"Condiciones actuales:\n"
+        + "\n".join(_bloque_clima(condiciones))
+        + "\n\nUmbrales para una buena aplicación:\n"
+        "• Viento ideal: 5–15 km/h\n"
+        "• Humedad relativa: 55–85%\n"
+        "• Prob. lluvia: menor a 30% en las próximas horas\n"
+        "• Evitar: horas de calor (>32°C) e inversiones térmicas (viento <3 km/h al anochecer)\n\n"
+        f"Detalle de la evaluación:\n"
+        + "\n".join(_bloque_advertencias(advertencias))
+        + f"\n\n{_ventana_sugerida(semaforo, condiciones, accion='aplicar')}"
+    )
+    return recomendacion, explicacion
 
 
 def generar_respuestas(
@@ -356,20 +472,22 @@ def generar_respuestas(
     if intencion == "consulta_plagas_zona":
         return _responder_plagas_zona(cultivo, ubicacion, condiciones)
 
+    if tipo_evaluacion == "siembra":
+        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+
     if tipo_evaluacion == "riego":
-        return _responder_riego(cultivo, semaforo, condiciones, advertencias)
+        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
 
     if tipo_evaluacion == "fertilizacion":
-        return _responder_fertilizacion(cultivo, semaforo, condiciones)
+        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
 
     if tipo_evaluacion == "cosecha":
-        return _responder_cosecha(cultivo, semaforo, condiciones)
+        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
 
     if tipo_evaluacion == "plagas":
         return _responder_fumigacion(
             cultivo=cultivo,
             semaforo=semaforo,
-            veredicto=veredicto,
             condiciones=condiciones,
             advertencias=advertencias,
             producto=producto,
@@ -377,24 +495,24 @@ def generar_respuestas(
             texto=texto,
         )
 
-    if tipo_evaluacion == "siembra":
-        return _responder_siembra(cultivo, semaforo, condiciones, advertencias)
-
     # Fallback genérico
-    accion = ACCIONES.get(tipo_evaluacion, tipo_evaluacion)
+    nombre = _nombre_cultivo(cultivo)
+    accion = {"siembra": "sembrar", "fertilizacion": "fertilizar", "riego": "regar", "cosecha": "cosechar"}.get(
+        tipo_evaluacion, tipo_evaluacion
+    )
     if semaforo == "verde":
-        rec = f"Sí podés {accion} {cultivo} en las condiciones actuales."
+        rec = f"Sí podés {accion} {nombre} en las condiciones actuales."
     elif semaforo == "amarillo":
-        rec = f"Podés {accion} con precaución. " + _ventana_sugerida(semaforo, condiciones)
+        rec = f"Podés {accion} {nombre} con precaución. " + _ventana_sugerida(semaforo, condiciones, accion=accion)
     else:
-        rec = f"Mejor esperar para {accion}. " + _ventana_sugerida(semaforo, condiciones)
+        rec = f"Mejor esperar para {accion} {nombre}. " + _ventana_sugerida(semaforo, condiciones, accion=accion)
 
     hora = datetime.now().strftime("%H:%M")
     exp = (
-        f"{_saludo_contexto(cultivo, tipo_evaluacion, ubicacion)} "
-        f"Consulta realizada a las {hora}. "
-        f"Datos de: {', '.join(fuentes) if fuentes else 'sin fuentes'}. "
-        f"Condiciones: {condiciones.get('temperatura_c')}°C, "
-        f"humedad {condiciones.get('humedad_pct')}%, viento {condiciones.get('viento_kmh')} km/h."
+        f"Consulta de {TIPOS_EVALUACION.get(tipo_evaluacion, tipo_evaluacion)} "
+        f"para {nombre} ({hora}).\n\n"
+        f"Clima:\n"
+        + "\n".join(_bloque_clima(condiciones))
+        + f"\n\nFuentes: {', '.join(fuentes) if fuentes else 'sin fuentes'}."
     )
     return rec, exp
