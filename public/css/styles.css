@@ -606,6 +606,45 @@ body.map-modal-open {
   color: var(--color-gray-500);
 }
 
+.audio-panel--recording {
+  border-color: var(--color-green-500);
+  background: #f0fdf4;
+}
+
+.recording-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-green-700);
+}
+
+.recording-indicator__dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background: #ef4444;
+  animation: recording-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(0.85); }
+}
+
+.btn--recording {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+.form__textarea--dictating {
+  border-color: var(--color-green-500);
+  box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
+}
+
 #audio-preview {
   width: 100%;
 }

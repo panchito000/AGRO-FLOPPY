@@ -23,23 +23,59 @@ ALLOWED_AUDIO_TYPES = {
     "audio/ogg",
     "audio/mpeg",
     "audio/mp4",
+    "audio/x-m4a",
+    "audio/m4a",
     "audio/wav",
     "audio/x-wav",
     "audio/aac",
+    "audio/x-aac",
 }
+
+
+def _normalizar_mime(content_type: str | None) -> str:
+    if not content_type:
+        return ""
+    base = content_type.split(";")[0].strip().lower()
+    if base in ALLOWED_AUDIO_TYPES:
+        return base
+    if base.startswith("audio/"):
+        return base
+    return ""
+
+
+def _extension_desde_mime(mime: str) -> str:
+    mapping = {
+        "audio/webm": ".webm",
+        "audio/ogg": ".ogg",
+        "audio/mpeg": ".mp3",
+        "audio/mp4": ".m4a",
+        "audio/x-m4a": ".m4a",
+        "audio/m4a": ".m4a",
+        "audio/wav": ".wav",
+        "audio/x-wav": ".wav",
+        "audio/aac": ".aac",
+        "audio/x-aac": ".aac",
+    }
+    return mapping.get(mime, ".webm")
 
 
 def _guardar_audio(audio: UploadFile) -> tuple[str, int, str | None]:
     UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
-    extension = Path(audio.filename or "nota.webm").suffix or ".webm"
+    mime = _normalizar_mime(audio.content_type)
+    extension = Path(audio.filename or "nota.webm").suffix.lower()
+    if not extension or extension == ".":
+        extension = _extension_desde_mime(mime) if mime else ".webm"
+    elif mime and extension != _extension_desde_mime(mime):
+        extension = _extension_desde_mime(mime)
+
     nombre_guardado = f"{uuid.uuid4().hex}{extension}"
     destino = UPLOADS_DIR / nombre_guardado
 
     contenido = audio.file.read()
     destino.write_bytes(contenido)
 
-    return nombre_guardado, len(contenido), audio.content_type
+    return nombre_guardado, len(contenido), mime or audio.content_type
 
 
 def _persistir(
@@ -82,11 +118,11 @@ def procesar_evaluacion(
     audio_mime_type = None
 
     if audio and audio.filename:
-        content_type = audio.content_type or ""
+        content_type = _normalizar_mime(audio.content_type)
         if content_type and content_type not in ALLOWED_AUDIO_TYPES:
             raise ValueError(
-                f"Formato de audio no soportado ({content_type}). "
-                "Usá webm, ogg, mp3, wav o m4a."
+                f"Formato de audio no soportado ({audio.content_type}). "
+                "Usá webm, ogg, mp3, m4a, wav o aac."
             )
         audio_nombre, audio_tamano, audio_mime_type = _guardar_audio(audio)
         audio_recibido = True

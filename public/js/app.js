@@ -18,6 +18,8 @@ const btnDetener = document.getElementById("btn-detener");
 const btnLimpiarAudio = document.getElementById("btn-limpiar-audio");
 const audioStatus = document.getElementById("audio-status");
 const audioPreview = document.getElementById("audio-preview");
+const audioPanel = document.getElementById("audio-panel");
+const recordingIndicator = document.getElementById("recording-indicator");
 
 const resultCards = {
   clima: document.getElementById("card-clima"),
@@ -31,10 +33,10 @@ const resultContents = {
   explicacion: document.getElementById("explicacion-content"),
 };
 
-let mediaRecorder = null;
-let audioChunks = [];
 let recordedBlob = null;
-let recordingStream = null;
+let recordedMimeType = "audio/webm";
+let recordedExtension = ".webm";
+let audioRecorder = null;
 
 function showToast(message, isError = false) {
   toast.textContent = message;
@@ -91,30 +93,50 @@ function updateAudioStatus(message) {
   audioStatus.textContent = message;
 }
 
+function setRecordingUi(active) {
+  audioPanel?.classList.toggle("audio-panel--recording", active);
+  btnGrabar.classList.toggle("btn--recording", active);
+  btnGrabar.disabled = active;
+  btnDetener.disabled = !active;
+  if (recordingIndicator) {
+    recordingIndicator.hidden = !active;
+  }
+}
+
 function setAudioPreview(blob) {
   if (!blob) {
     audioPreview.hidden = true;
     audioPreview.removeAttribute("src");
+    audioPreview.removeAttribute("playsinline");
     return;
   }
 
   audioPreview.src = URL.createObjectURL(blob);
+  audioPreview.setAttribute("playsinline", "");
   audioPreview.hidden = false;
 }
 
 function clearAudio() {
+  if (audioRecorder?.isRecording()) {
+    audioRecorder.stop();
+  }
+
   recordedBlob = null;
-  audioChunks = [];
+  recordedMimeType = "audio/webm";
+  recordedExtension = ".webm";
   audioFileInput.value = "";
   btnLimpiarAudio.disabled = true;
+  setRecordingUi(false);
   setAudioPreview(null);
+  textoInput.classList.remove("form__textarea--dictating");
   updateAudioStatus("Sin audio seleccionado.");
 }
 
 function getActiveAudioFile() {
   if (recordedBlob) {
-    return new File([recordedBlob], "nota-grabada.webm", {
-      type: recordedBlob.type || "audio/webm",
+    const filename = `nota-grabada${recordedExtension}`;
+    return new File([recordedBlob], filename, {
+      type: recordedMimeType || recordedBlob.type || "audio/webm",
     });
   }
 
@@ -129,44 +151,69 @@ function hasTextoOAudio() {
   return textoInput.value.trim().length > 0 || getActiveAudioFile() !== null;
 }
 
-async function startRecording() {
-  try {
-    recordingStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(recordingStream);
-    audioChunks = [];
+function initAudioRecorder() {
+  if (!window.ZafraAudioRecorder) {
+    return;
+  }
 
-    mediaRecorder.addEventListener("dataavailable", (event) => {
-      if (event.data.size > 0) {
-        audioChunks.push(event.data);
+  audioRecorder = new ZafraAudioRecorder({
+    onStatus: (message) => updateAudioStatus(message),
+    onTranscript: ({ display, isRecording }) => {
+      if (isRecording) {
+        textoInput.value = display;
+        textoInput.classList.add("form__textarea--dictating");
+        textoInput.scrollTop = textoInput.scrollHeight;
       }
-    });
-
-    mediaRecorder.addEventListener("stop", () => {
-      recordedBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || "audio/webm" });
+    },
+    onComplete: ({ blob, mimeType, extension }) => {
+      recordedBlob = blob;
+      recordedMimeType = mimeType;
+      recordedExtension = extension;
       audioFileInput.value = "";
       setAudioPreview(recordedBlob);
       btnLimpiarAudio.disabled = false;
-      updateAudioStatus(`Grabación lista (${formatBytes(recordedBlob.size)}).`);
-      recordingStream.getTracks().forEach((track) => track.stop());
-      recordingStream = null;
-    });
+      setRecordingUi(false);
+      textoInput.classList.remove("form__textarea--dictating");
 
-    mediaRecorder.start();
-    btnGrabar.disabled = true;
-    btnDetener.disabled = false;
-    updateAudioStatus("Grabando...");
-  } catch (error) {
-    showToast("No se pudo acceder al micrófono.", true);
+      const committed = audioRecorder.getCommittedText();
+      if (committed) {
+        textoInput.value = committed;
+      }
+
+      updateAudioStatus(`Grabación lista (${formatBytes(recordedBlob.size)}). Revisá las notas y tocá Analizar.`);
+
+      if (!committed) {
+        showToast("Audio guardado. Agregá o revisá el texto en Notas antes de analizar.", false);
+      }
+    },
+    onError: (message) => {
+      setRecordingUi(false);
+      textoInput.classList.remove("form__textarea--dictating");
+      showToast(message, true);
+    },
+  });
+}
+
+function startRecording() {
+  if (!audioRecorder) {
+    showToast("La grabación no está disponible en este navegador.", true);
+    return;
   }
+
+  if (audioRecorder.isRecording()) {
+    return;
+  }
+
+  clearAudio();
+  setRecordingUi(true);
+  audioRecorder.start(textoInput.value.trim());
 }
 
 function stopRecording() {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") {
-    mediaRecorder.stop();
+  if (!audioRecorder?.isRecording()) {
+    return;
   }
-
-  btnGrabar.disabled = false;
-  btnDetener.disabled = true;
+  audioRecorder.stop();
 }
 
 function formatTextoHumano(texto) {
@@ -310,6 +357,8 @@ async function enviarEvaluacion(formData) {
   return response.json();
 }
 
+initAudioRecorder();
+
 btnGrabar.addEventListener("click", startRecording);
 btnDetener.addEventListener("click", stopRecording);
 btnLimpiarAudio.addEventListener("click", clearAudio);
@@ -322,7 +371,7 @@ audioFileInput.addEventListener("change", () => {
   }
 
   recordedBlob = null;
-  audioChunks = [];
+  setRecordingUi(false);
   setAudioPreview(file);
   btnLimpiarAudio.disabled = false;
   updateAudioStatus(`Archivo seleccionado: ${file.name} (${formatBytes(file.size)}).`);
@@ -330,6 +379,11 @@ audioFileInput.addEventListener("change", () => {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
+
+  if (audioRecorder?.isRecording()) {
+    showToast("Detené la grabación antes de analizar.", true);
+    return;
+  }
 
   if (!form.checkValidity()) {
     form.reportValidity();
@@ -364,6 +418,10 @@ form.addEventListener("submit", async (event) => {
   const audioFile = getActiveAudioFile();
   if (audioFile) {
     formData.append("audio", audioFile, audioFile.name);
+  }
+
+  if (!texto && audioFile) {
+    showToast("Para mejores resultados, revisá que las notas tengan tu consulta.", false);
   }
 
   resetResults();

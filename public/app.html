@@ -96,12 +96,12 @@
                 rows="4"
                 maxlength="5000"
               ></textarea>
-              <p class="form__hint">Podés escribir notas, subir audio o enviar ambos.</p>
+              <p class="form__hint">Podés escribir, dictar con el micrófono (el texto aparece en vivo) o subir un archivo.</p>
             </div>
 
             <div class="form__group">
               <span class="form__label">Nota de voz (audio)</span>
-              <div class="audio-panel">
+              <div class="audio-panel" id="audio-panel">
                 <div class="audio-panel__controls">
                   <button type="button" class="btn btn--secondary" id="btn-grabar">
                     Grabar
@@ -113,6 +113,10 @@
                     Limpiar
                   </button>
                 </div>
+                <p class="recording-indicator" id="recording-indicator" hidden>
+                  <span class="recording-indicator__dot" aria-hidden="true"></span>
+                  <span>Escuchando…</span>
+                </p>
                 <label class="audio-panel__upload">
                   <span>O subir un archivo</span>
                   <input
@@ -212,6 +216,7 @@
   <script src="js/map-config.js"></script>
   <script src="js/santa-cruz-data.js"></script>
   <script src="js/map-picker.js"></script>
+  <script src="js/audio-recorder.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
