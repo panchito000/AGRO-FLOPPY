@@ -645,6 +645,24 @@ body.map-modal-open {
   box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.12);
 }
 
+.dictation-badge {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.dictation-badge--on {
+  color: var(--color-green-700);
+}
+
+.dictation-badge--warn {
+  color: #b45309;
+}
+
+.dictation-badge--off {
+  color: var(--color-gray-500);
+}
+
 #audio-preview {
   width: 100%;
 }

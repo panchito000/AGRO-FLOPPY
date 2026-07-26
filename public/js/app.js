@@ -20,6 +20,8 @@ const audioStatus = document.getElementById("audio-status");
 const audioPreview = document.getElementById("audio-preview");
 const audioPanel = document.getElementById("audio-panel");
 const recordingIndicator = document.getElementById("recording-indicator");
+const dictationBadge = document.getElementById("dictation-badge");
+const dictationHint = document.getElementById("dictation-hint");
 
 const resultCards = {
   clima: document.getElementById("card-clima"),
@@ -152,8 +154,36 @@ function getActiveAudioFile() {
   return null;
 }
 
+function updateDictationBadge(active, detail, hint) {
+  if (!dictationBadge) return;
+
+  if (detail === "unsupported") {
+    dictationBadge.hidden = false;
+    dictationBadge.textContent = "Dictado en vivo: no disponible en este navegador (usá Chrome o Edge)";
+    dictationBadge.className = "dictation-badge dictation-badge--warn";
+    if (hint && dictationHint) {
+      dictationHint.textContent = hint;
+    }
+    return;
+  }
+
+  if (!active) {
+    dictationBadge.hidden = true;
+    dictationBadge.className = "dictation-badge dictation-badge--off";
+    return;
+  }
+
+  dictationBadge.hidden = false;
+  dictationBadge.textContent = "Dictado en vivo: activo — mirá Notas mientras hablás";
+  dictationBadge.className = "dictation-badge dictation-badge--on";
+}
+
 function hasTextoOAudio() {
   return textoInput.value.trim().length > 0 || getActiveAudioFile() !== null;
+}
+
+function hasTextoConsulta() {
+  return textoInput.value.trim().length > 0;
 }
 
 function initAudioRecorder() {
@@ -170,8 +200,11 @@ function initAudioRecorder() {
         textoInput.classList.remove("form__textarea--dictating");
       }
     },
+    onDictationChange: ({ active, detail, hint }) => {
+      updateDictationBadge(active, detail, hint);
+    },
     onTranscript: ({ display, isRecording }) => {
-      if (isRecording) {
+      if (display && isRecording) {
         textoInput.value = display;
         textoInput.classList.add("form__textarea--dictating");
         textoInput.scrollTop = textoInput.scrollHeight;
@@ -185,6 +218,7 @@ function initAudioRecorder() {
       setAudioPreview(recordedBlob);
       btnLimpiarAudio.disabled = false;
       setRecordingUi(false);
+      updateDictationBadge(false, "idle");
       textoInput.classList.remove("form__textarea--dictating");
 
       const committed = audioRecorder.getCommittedText();
@@ -195,7 +229,8 @@ function initAudioRecorder() {
       updateAudioStatus(`Grabación lista (${formatBytes(recordedBlob.size)}). Revisá las notas y tocá Analizar.`);
 
       if (!committed) {
-        showToast("Audio guardado. Agregá o revisá el texto en Notas antes de analizar.", false);
+        showToast("No se detectó texto. Escribí tu consulta en Notas antes de analizar.", true);
+        textoInput.focus();
       }
     },
     onError: (message) => {
@@ -409,8 +444,9 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
-  if (!hasTextoOAudio()) {
-    showToast("Agregá una nota de texto o un audio antes de analizar.", true);
+  if (!hasTextoConsulta()) {
+    showToast("Escribí o dictá tu consulta en Notas antes de analizar.", true);
+    textoInput.focus();
     return;
   }
 
@@ -429,10 +465,6 @@ form.addEventListener("submit", async (event) => {
   const audioFile = getActiveAudioFile();
   if (audioFile) {
     formData.append("audio", audioFile, audioFile.name);
-  }
-
-  if (!texto && audioFile) {
-    showToast("Para mejores resultados, revisá que las notas tengan tu consulta.", false);
   }
 
   resetResults();
