@@ -591,16 +591,6 @@ body.map-modal-open {
   gap: 0.5rem;
 }
 
-.audio-panel__upload {
-  font-size: 0.875rem;
-  color: var(--color-green-700);
-  cursor: pointer;
-}
-
-.audio-panel__upload span {
-  text-decoration: underline;
-}
-
 .audio-panel__status {
   font-size: 0.8125rem;
   color: var(--color-gray-500);

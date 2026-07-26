@@ -12,7 +12,6 @@ const btnLoader = btnAnalizar.querySelector(".btn__loader");
 const toast = document.getElementById("toast");
 
 const textoInput = document.getElementById("texto");
-const audioFileInput = document.getElementById("audio-file");
 const btnGrabar = document.getElementById("btn-grabar");
 const btnDetener = document.getElementById("btn-detener");
 const btnLimpiarAudio = document.getElementById("btn-limpiar-audio");
@@ -111,7 +110,6 @@ function resetSavedAudio() {
   recordedBlob = null;
   recordedMimeType = "audio/webm";
   recordedExtension = ".webm";
-  audioFileInput.value = "";
   btnLimpiarAudio.disabled = true;
   setAudioPreview(null);
 }
@@ -146,10 +144,6 @@ function getActiveAudioFile() {
     return new File([recordedBlob], filename, {
       type: recordedMimeType || recordedBlob.type || "audio/webm",
     });
-  }
-
-  if (audioFileInput.files.length > 0) {
-    return audioFileInput.files[0];
   }
 
   return null;
@@ -240,7 +234,6 @@ function initAudioRecorder() {
         updateAudioStatus(textOnly ? "Texto listo. Revisá Notas y tocá Analizar." : "Listo. Revisá Notas y tocá Analizar.");
       }
 
-      audioFileInput.value = "";
       setRecordingUi(false);
       updateDictationBadge(false, "idle");
       textoInput.classList.remove("form__textarea--dictating");
@@ -444,20 +437,6 @@ initAudioRecorder();
 btnGrabar.addEventListener("click", startRecording);
 btnDetener.addEventListener("click", stopRecording);
 btnLimpiarAudio.addEventListener("click", clearAudio);
-
-audioFileInput.addEventListener("change", () => {
-  const file = audioFileInput.files[0];
-  if (!file) {
-    clearAudio();
-    return;
-  }
-
-  recordedBlob = null;
-  setRecordingUi(false);
-  setAudioPreview(file);
-  btnLimpiarAudio.disabled = false;
-  updateAudioStatus(`Archivo seleccionado: ${file.name} (${formatBytes(file.size)}).`);
-});
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
