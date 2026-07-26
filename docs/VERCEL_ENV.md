@@ -10,7 +10,7 @@ Configurá en **Vercel → Project agro-floppy → Settings → Environment Vari
 | `SUPABASE_KEY` | Clave **anon** de Supabase → Settings → API |
 | `APP_ENV` | `production` |
 | `ROOT_PATH` | `/api` |
-| `CORS_ORIGINS` | `https://agro-floppy.vercel.app` |
+| `CORS_ORIGINS` | `https://agro-floppy-lilac.vercel.app` |
 
 Después: **Deployments → Redeploy** el último deploy (o `vercel deploy --prod`).
 
@@ -22,7 +22,7 @@ Usá la URL **pooler** `aws-0-us-east-1.pooler.supabase.com` (región del proyec
 ## Verificar producción
 
 ```bash
-curl https://agro-floppy.vercel.app/api/
+curl https://agro-floppy-lilac.vercel.app/api/
 ```
 
 Tras analizar desde el celular, revisá filas nuevas en Supabase → Table Editor → `evaluaciones`.

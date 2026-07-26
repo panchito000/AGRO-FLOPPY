@@ -1,26 +1,28 @@
-# AGRO-FLOPPY 
+# AgroFloppy
 
-Copiloto inteligente para ingenieros agrónomos, administradores agrícolas y productores tecnificados. Analiza cultivos de **soya** y **maíz** en Santa Cruz, Bolivia usando información meteorológica de múltiples fuentes, reglas agronómicas validadas e IA (pendiente).
+Copiloto inteligente para ingenieros agrónomos, administradores agrícolas y productores tecnificados. Analiza cultivos de **soya** y **maíz** en Santa Cruz, Bolivia usando información meteorológica de múltiples fuentes, reglas agronómicas validadas e IA generativa (pendiente).
 
 | Recurso | URL |
 |---------|-----|
 | **GitHub** | https://github.com/panchito000/AGRO-FLOPPY |
-| **Producción** | agro-floppy-lilac.vercel.app|
-| **API health** | https://agro-floppy.vercel.app/api/ |
-| **Swagger** | https://agro-floppy.vercel.app/api/docs |
-| **Supabase** |https://supabase.com/dashboard/project/skxgdeogffuaafkdynyk |
+| **Producción** | https://agro-floppy-lilac.vercel.app |
+| **App (tras login)** | https://agro-floppy-lilac.vercel.app/app.html |
+| **API health** | https://agro-floppy-lilac.vercel.app/api/ |
+| **Swagger** | https://agro-floppy-lilac.vercel.app/api/docs |
+| **Supabase (proyecto)** | https://supabase.com/dashboard/project/skxgdeogffuaafkdynyk |
 
 ---
 
 ## Qué hace
 
-1. El usuario selecciona una finca en el mapa, elige cultivo y tipo de evaluación
-2. Opcionalmente agrega notas de texto o un audio
-3. El backend consulta el clima en vivo de la ubicación (3 fuentes API gratuitas)
-4. Evalúa condiciones contra reglas agronómicas (umbrales de viento, temp, humedad por producto)
-5. Devuelve un **semáforo** (verde/amarillo/rojo) con veredicto, advertencias, recomendación y explicación
-6. Guarda la evaluación en **Supabase** (PostgreSQL) si `DATABASE_URL` está configurada
-7. *(Pendiente)* Generar recomendaciones enriquecidas con OpenAI
+1. El usuario **inicia sesión** (Supabase Auth)
+2. Selecciona una finca en el mapa, elige cultivo y tipo de evaluación
+3. Opcionalmente agrega notas de texto o un audio (grabación + dictado en vivo)
+4. El backend consulta el clima en vivo de la ubicación (3 fuentes API gratuitas)
+5. Evalúa condiciones contra reglas agronómicas (umbrales de viento, temp, humedad por producto)
+6. Devuelve un **semáforo** (verde/amarillo/rojo) con veredicto, advertencias, recomendación y explicación
+7. Guarda la evaluación en **Supabase** (PostgreSQL) si `DATABASE_URL` está configurada
+8. *(Pendiente)* Generar recomendaciones enriquecidas con OpenAI
 
 ---
 
@@ -29,6 +31,7 @@ Copiloto inteligente para ingenieros agrónomos, administradores agrícolas y pr
 | Funcionalidad | Estado |
 |---------------|--------|
 | Formulario + mapa Leaflet + audio | ✅ Listo |
+| Login / registro (Supabase Auth) | ✅ Listo |
 | Clima consolidado (Open-Meteo, wttr, Foreca) | ✅ Integrado en backend |
 | Reglas agronómicas + semáforo | ✅ Integrado |
 | Persistencia en Supabase | ✅ Código listo (requiere `DATABASE_URL` en local/Vercel) |
@@ -36,9 +39,9 @@ Copiloto inteligente para ingenieros agrónomos, administradores agrícolas y pr
 | Frontend responsive (celular / pantalla chica) | ✅ Scroll + auto-scroll a resultados |
 | Despliegue Vercel | ✅ Frontend + API serverless |
 | OpenAI / IA generativa | ⏳ Pendiente |
-| Auth de usuarios (Supabase Auth) | ⏳ Pendiente |
+| Validación JWT en backend + evaluaciones por usuario | ⏳ Pendiente |
 | Supabase Storage para audios | ⏳ Pendiente (hoy: `/tmp` en Vercel) |
-| n8n workflow | 📄 Listo para importar (`Saul/scripts/n8n_workflow.json`) |
+| n8n workflow | 📄 Listo para importar ([`Saul/scripts/n8n_workflow.json`](Saul/scripts/n8n_workflow.json)) |
 
 ---
 
@@ -70,10 +73,15 @@ AGRO-FLOPPY/
 │           ├── schemas.py          # Pydantic (request/response)
 │           └── db_models.py        # SQLAlchemy (7 tablas)
 ├── frontend/                       # Fuente del frontend (desarrollo local)
-│   ├── index.html
+│   ├── index.html                  # Login y registro
+│   ├── app.html                    # App principal (protegida)
+│   ├── assets/logo.png
 │   ├── css/styles.css
 │   └── js/
 │       ├── app.js                  # Formulario + resultados + semáforo
+│       ├── auth.js                 # Login/registro Supabase
+│       ├── supabase-config.js      # URL + anon key (no commitear secretos)
+│       ├── audio-recorder.js       # Grabación + dictado
 │       ├── config.js               # URL API (local vs Vercel)
 │       ├── map-picker.js
 │       ├── map-config.js
@@ -89,8 +97,10 @@ AGRO-FLOPPY/
 │       ├── test_connection.py
 │       └── verify_schema.py
 ├── docs/
+│   ├── CONTEXTO_PROYECTO.md        # Handoff / contexto completo del equipo
 │   ├── README_AGRONOMIA.md
-│   └── VERCEL_ENV.md               # Guía de variables en producción
+│   ├── VERCEL_ENV.md               # Guía de variables en producción
+│   └── CONOCIMIENTO.md
 ├── scripts/
 │   └── configure_vercel_env.py     # Configura env vars en Vercel vía API
 ├── Saul/                           # Contribución original de Saul (referencia)
@@ -118,7 +128,7 @@ PostgreSQL en **Supabase** — proyecto `skxgdeogffuaafkdynyk` (región **us-eas
 |-------|-----------|
 | `cultivos` | Catálogo: soya, maíz |
 | `tipos_evaluacion` | siembra, fertilización, riego, plagas, cosecha |
-| `usuarios` | Productores, agrónomos, administradores *(futuro auth)* |
+| `usuarios` | Productores, agrónomos, administradores (`auth_user_id` para Supabase Auth) |
 | `lugares` | 14 fincas demo de Santa Cruz |
 | `campos_poligonos` | Polígonos de potreros/lotes para el mapa |
 | `evaluaciones` | Registro de cada evaluación (núcleo del negocio) |
@@ -176,7 +186,7 @@ SUPABASE_URL=https://skxgdeogffuaafkdynyk.supabase.co
 SUPABASE_KEY=tu-clave-anon
 
 APP_ENV=development
-CORS_ORIGINS=http://localhost:5500,http://127.0.0.1:5500,http://localhost:8000
+CORS_ORIGINS=http://localhost:8080,http://127.0.0.1:8080,http://localhost:8000
 ROOT_PATH=
 ```
 
@@ -187,7 +197,7 @@ ROOT_PATH=
 | `SUPABASE_KEY` | Clave anon | Igual |
 | `APP_ENV` | `development` | `production` |
 | `ROOT_PATH` | *(vacío)* | `/api` |
-| `CORS_ORIGINS` | localhost | `https://agro-floppy.vercel.app` |
+| `CORS_ORIGINS` | localhost:8080 | `https://agro-floppy-lilac.vercel.app` |
 
 Guía detallada de producción: [`docs/VERCEL_ENV.md`](docs/VERCEL_ENV.md)
 
@@ -240,19 +250,32 @@ Verificar: [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### 4. Correr el frontend
 
-Abrir `frontend/index.html` con **Live Server** (VS Code) en puerto 5500, o cualquier servidor estático.
+```bash
+cd frontend
+python -m http.server 8080
+```
 
-El frontend detecta el entorno en `frontend/js/config.js`:
+| Página | URL local |
+|--------|-----------|
+| Login | http://localhost:8080/ |
+| App | http://localhost:8080/app.html |
+
+> En Windows el puerto 5500 suele estar bloqueado; usar **8080**. También podés usar Live Server apuntando a `frontend/`.
+
+Copiá `frontend/js/supabase-config.example.js` → `supabase-config.js` y completá la anon key de Supabase.
+
+El frontend detecta el entorno en [`frontend/js/config.js`](frontend/js/config.js):
 - **Local** → `http://localhost:8000`
 - **Vercel** → `/api`
 
 ### 5. Probar una evaluación
 
-1. Elegir cultivo y tipo de evaluación
-2. Marcar ubicación en el mapa (lat/lng obligatorios)
-3. Agregar texto o audio
-4. Clic en **Analizar** → semáforo + clima + recomendación
-5. Verificar en Supabase → Table Editor → `evaluaciones`
+1. Iniciar sesión en http://localhost:8080/
+2. Elegir cultivo y tipo de evaluación
+3. Marcar ubicación en el mapa (lat/lng obligatorios)
+4. Agregar texto o audio
+5. Clic en **Analizar** → semáforo + clima + recomendación
+6. Verificar en [Supabase → Table Editor → evaluaciones](https://supabase.com/dashboard/project/skxgdeogffuaafkdynyk/editor)
 
 ---
 
@@ -397,9 +420,17 @@ Reglas en `backend/app/services/clima/datos_agronomicos.py`.
 
 ## Frontend
 
+### Páginas
+
+| Archivo | Ruta | Función |
+|---------|------|---------|
+| [`frontend/index.html`](frontend/index.html) | `/` | Login y registro |
+| [`frontend/app.html`](frontend/app.html) | `/app.html` | Formulario de evaluación (requiere sesión) |
+
 ### Características
 
-- Formulario con cultivo, tipo, mapa, texto y audio (grabar o subir)
+- Login/registro con Supabase Auth
+- Formulario con cultivo, tipo, mapa, texto y audio (grabar + dictado en vivo)
 - Mapa modal Leaflet con geolocalización y 14 fincas demo de Santa Cruz
 - Tarjetas de resultados: **Clima**, **Recomendación**, **Explicación**
 - Semáforo visual (verde / amarillo / rojo) con veredicto y advertencias
@@ -407,11 +438,13 @@ Reglas en `backend/app/services/clima/datos_agronomicos.py`.
 
 ### Sincronizar frontend → public (antes de deploy)
 
-```bash
+```powershell
 # PowerShell, desde la raíz del proyecto
 Copy-Item frontend\index.html public\index.html -Force
+Copy-Item frontend\app.html public\app.html -Force
 Copy-Item frontend\css\styles.css public\css\styles.css -Force
 Copy-Item frontend\js\*.js public\js\ -Force
+Copy-Item frontend\assets\logo.png public\assets\logo.png -Force
 ```
 
 ---
@@ -421,7 +454,7 @@ Copy-Item frontend\js\*.js public\js\ -Force
 Arquitectura: **Vercel** (frontend estático + API Python serverless) + **Supabase** (PostgreSQL).
 
 ```
-Usuario → agro-floppy.vercel.app → FastAPI (/api) → Supabase PostgreSQL
+Usuario → agro-floppy-lilac.vercel.app → FastAPI (/api) → Supabase PostgreSQL
 ```
 
 ### Paso 1 — Código en GitHub
@@ -449,17 +482,17 @@ En **Project → Settings → Environment Variables** (Production):
 | `SUPABASE_KEY` | Clave anon de Supabase |
 | `ROOT_PATH` | `/api` |
 | `APP_ENV` | `production` |
-| `CORS_ORIGINS` | `https://agro-floppy.vercel.app` |
+| `CORS_ORIGINS` | `https://agro-floppy-lilac.vercel.app` |
 
-Ver [`docs/VERCEL_ENV.md`](docs/VERCEL_ENV.md) o ejecutar `scripts/configure_vercel_env.py`.
+Ver [`docs/VERCEL_ENV.md`](docs/VERCEL_ENV.md) o ejecutar [`scripts/configure_vercel_env.py`](scripts/configure_vercel_env.py).
 
 ### Paso 4 — Redeploy y verificar
 
 ```bash
-curl https://agro-floppy.vercel.app/api/
+curl https://agro-floppy-lilac.vercel.app/api/
 ```
 
-Tras analizar desde la app, revisar filas en Supabase → `evaluaciones`.
+Tras analizar desde la app, revisar filas en [Supabase → evaluaciones](https://supabase.com/dashboard/project/skxgdeogffuaafkdynyk/editor).
 
 ---
 
@@ -519,11 +552,10 @@ docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8
 - [x] Schema Supabase v2 + scripts de aplicación/verificación
 - [x] Persistir evaluaciones en Supabase
 - [x] Frontend responsive (móvil / pantalla chica)
-- [ ] Configurar `DATABASE_URL` en Vercel y redeploy producción
+- [x] Autenticación con Supabase Auth (login/registro)
+- [ ] Validación JWT en backend + historial de evaluaciones por usuario
 - [ ] Integrar OpenAI para recomendaciones con IA
-- [ ] Autenticación con Supabase Auth
 - [ ] Supabase Storage para audios persistentes
-- [ ] Historial de evaluaciones por usuario
 - [ ] Alertas automáticas por WhatsApp/Telegram (vía n8n)
 - [ ] Dashboard de monitoreo de cultivos
 - [ ] Tests con pytest + TestClient
@@ -534,16 +566,18 @@ docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n n8nio/n8
 
 | Archivo | Contenido |
 |---------|-----------|
+| [`docs/CONTEXTO_PROYECTO.md`](docs/CONTEXTO_PROYECTO.md) | Handoff completo del proyecto (URLs, auth, deploy) |
 | [`AGENTS.md`](AGENTS.md) | Contexto para agentes de Cursor |
 | [`IMPLEMENTACION.md`](IMPLEMENTACION.md) | Plan de implementación por fases |
 | [`docs/README_AGRONOMIA.md`](docs/README_AGRONOMIA.md) | Detalle agronómico |
 | [`docs/VERCEL_ENV.md`](docs/VERCEL_ENV.md) | Variables de entorno en producción |
+| [`docs/CONOCIMIENTO.md`](docs/CONOCIMIENTO.md) | Base de conocimiento |
 | [`database/AUDITORIA.md`](database/AUDITORIA.md) | Auditoría del modelo de datos |
 
 ---
 
 ## Equipo
 
-Proyecto hackathon **AGRO-FLOPPY / Zafra AI** — Santa Cruz, Bolivia.
+Proyecto hackathon **AgroFloppy** — Santa Cruz, Bolivia.
 
 Repositorio: [github.com/panchito000/AGRO-FLOPPY](https://github.com/panchito000/AGRO-FLOPPY)
