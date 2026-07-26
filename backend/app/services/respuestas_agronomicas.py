@@ -91,6 +91,9 @@ def _es_consulta_evitar(texto: str) -> bool:
         r"mal[a]?\s+(forma|manera|epoca|practica)",
         r"cu[aá]ndo\s+no",
         r"no\s+(deber[ií]a|conviene|fertiliz|sembr|regar|cosech)",
+        r"no\s+deber[ií]a\s+hacer",
+        r"cosas?\s+no\s+deber[ií]a",
+        r"qu[eé]\s+cosas?\s+no",
         r"qu[eé]\s+evitar",
         r"formas?\s+incorrectas?",
         r"errores?\s+(comunes?|frecuentes?|al|de)",
@@ -98,6 +101,100 @@ def _es_consulta_evitar(texto: str) -> bool:
         r"evitar.*fertiliz",
         r"evitar.*siembra",
     )
+
+
+def _es_consulta_evitar_riego(texto: str) -> bool:
+    return _coincide(
+        texto,
+        r"cosas?\s+no\s+deber[ií]a",
+        r"no\s+deber[ií]a\s+hacer",
+        r"qu[eé]\s+cosas?\s+no",
+        r"evitar.*regar",
+        r"evitar.*riego",
+        r"errores?\s+.*regar",
+        r"mal\s+regar",
+        r"peor(es)?\s+.*regar",
+        r"a la hora de regar",
+        r"al regar",
+        r"no\s+deber[ií]a\s+.*regar",
+    ) or (_es_consulta_evitar(texto) and _coincide(texto, r"regar", r"riego"))
+
+
+def _es_consulta_ventana(texto: str) -> bool:
+    return _coincide(
+        texto,
+        r"cu[aá]ndo\s+(puedo|debo|conviene|ser[ií]a)",
+        r"deber[ií]a\s+esperar",
+        r"me\s+conviene",
+        r"ventana\s+(de|para)",
+        r"en\s+cu[aá]nto\s+tiempo",
+        r"cu[aá]ndo\s+s[ií]",
+        r"es\s+buen\s+momento",
+        r"hoy\s+puedo",
+        r"hoy\s+a\s+esta\s+hora",
+        r"a\s+esta\s+hora",
+        r"conviene\s+regar",
+    )
+
+
+def detectar_sub_intenciones(texto: str | None, tema: str) -> list[str]:
+    """Detecta una o más sub-intenciones dentro del mismo tema."""
+    if not texto:
+        return ["evaluacion_clima"]
+
+    t = texto.lower().strip()
+    subs: list[str] = []
+
+    if tema == "plagas":
+        if _coincide(t, r"prevenir", r"prevenci", r"como\s+evitar", r"c[oó]mo\s+prevenir", r"evitar.*plagas?"):
+            subs.append("consulta_plagas_prevencion")
+        elif _coincide(
+            t,
+            r"qu[eé]\s+plagas?",
+            r"plagas?\s+(hay|puedo|encuentro|existen|tengo|encontrar|para|que\s+puedo)",
+            r"sobre\s+las\s+plagas",
+            r"plagas?\s+.*sufrir",
+        ):
+            subs.append("consulta_plagas_zona")
+
+    if tema == "siembra" and _coincide(
+        t, r"peor(es)?\s+(epocas?|momentos?)", r"mal[a]?\s+epoca", r"cu[aá]ndo\s+no\s+sembr", r"evitar.*siembra"
+    ):
+        subs.append("consulta_epocas_siembra")
+
+    if tema == "fertilizacion" and (
+        _es_consulta_evitar(t) or _coincide(t, r"peor.*fertiliz", r"mal.*fertiliz", r"evitar.*fertiliz")
+    ):
+        subs.append("consulta_evitar_fertilizacion")
+
+    if tema == "riego" and _es_consulta_evitar_riego(t):
+        subs.append("consulta_evitar_riego")
+
+    if _es_consulta_ventana(t):
+        subs.append("consulta_ventana")
+
+    if buscar_producto(t) or any(k in t for k in PRODUCTOS):
+        subs.append("consulta_producto")
+
+    if _coincide(t, r"qu[eé]\s+(producto|fungicida|insecticida|herbicida)", r"con\s+qu[eé]"):
+        subs.append("consulta_producto_sugerido")
+
+    if not subs:
+        subs.append("evaluacion_clima")
+
+    orden = [
+        "consulta_ventana",
+        "evaluacion_clima",
+        "consulta_epocas_siembra",
+        "consulta_evitar_fertilizacion",
+        "consulta_evitar_riego",
+        "consulta_plagas_zona",
+        "consulta_plagas_prevencion",
+        "consulta_producto",
+        "consulta_producto_sugerido",
+    ]
+    subs.sort(key=lambda s: orden.index(s) if s in orden else 99)
+    return list(dict.fromkeys(subs))
 
 
 def detectar_sub_intencion(texto: str | None, tema: str) -> str:
@@ -148,20 +245,10 @@ def detectar_sub_intencion(texto: str | None, tema: str) -> str:
     ):
         return "consulta_evitar_fertilizacion"
 
-    if tema == "riego" and _es_consulta_evitar(t):
+    if tema == "riego" and _es_consulta_evitar_riego(t):
         return "consulta_evitar_riego"
 
-    if _coincide(
-        t,
-        r"cu[aá]ndo\s+(puedo|debo|conviene|ser[ií]a)",
-        r"deber[ií]a\s+esperar",
-        r"me\s+conviene",
-        r"ventana\s+(de|para)",
-        r"en\s+cu[aá]nto\s+tiempo",
-        r"cu[aá]ndo\s+s[ií]",
-        r"es\s+buen\s+momento",
-        r"hoy\s+puedo",
-    ):
+    if _es_consulta_ventana(t):
         return "consulta_ventana"
 
     if buscar_producto(t) or any(k in t for k in PRODUCTOS):
@@ -182,9 +269,11 @@ def detectar_intencion(texto: str | None, tipo_evaluacion: str) -> str:
     if not texto:
         return "evaluacion_clima"
 
-    sub = detectar_sub_intencion(texto, temas[0])
-    if sub != "evaluacion_clima":
-        return sub
+    subs = detectar_sub_intenciones(texto, temas[0])
+    if len(subs) > 1:
+        return "consulta_multiple"
+    if subs[0] != "evaluacion_clima":
+        return subs[0]
 
     return "evaluacion_clima"
 
@@ -500,6 +589,56 @@ def _responder_riego(
     return recomendacion, explicacion
 
 
+def _responder_riego_evitar(
+    cultivo: str,
+    condiciones: dict,
+    ubicacion: str | None,
+) -> tuple[str, str]:
+    """Qué NO hacer al regar y peores prácticas."""
+    info = RIEGO.get(cultivo, RIEGO["soya"])
+    nombre = _nombre_cultivo(cultivo)
+    zona = _zona_descripcion(ubicacion)
+    peores = info.get("peores_practicas", [])
+    cuando_no = info.get("cuando_no", [])
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+    humedad_suelo = condiciones.get("humedad_suelo_pct")
+    temp = condiciones.get("temperatura_c")
+    hora = datetime.now().hour
+
+    recomendacion = (
+        f"Al regar {nombre} en {zona}, evitá: regar al mediodía con calor, "
+        f"riego superficial frecuente, regar con suelo encharcado o justo antes de lluvia fuerte. "
+        f"Mejor horario: {info['mejor_horario']}."
+    )
+
+    alertas_hoy: list[str] = []
+    if 11 <= hora <= 15:
+        alertas_hoy.append("Estás en horario de mediodía — no es ideal para regar salvo emergencia.")
+    if prob_lluvia > 40:
+        alertas_hoy.append(f"Hay {prob_lluvia}% de lluvia prevista — regar ahora sería un error.")
+    if humedad_suelo is not None and humedad_suelo >= 65:
+        alertas_hoy.append(f"El suelo ya tiene {humedad_suelo}% de humedad — regar ahora no conviene.")
+    if temp and temp > 32:
+        alertas_hoy.append(f"Con {temp}°C, evitá regar en pleno calor.")
+
+    explicacion = (
+        f"Cosas que NO deberías hacer a la hora de regar {nombre}:\n\n"
+        f"Errores frecuentes:\n"
+        + "\n".join(f"• {p}" for p in peores)
+        + "\n\nCuándo NO regar:\n"
+        + "\n".join(f"• {c}" for c in cuando_no)
+        + f"\n\nHorario recomendado: {info['mejor_horario']}\n"
+        f"Frecuencia referencia: {info['frecuencia_referencia']}\n\n"
+        f"Clima hoy:\n"
+        + "\n".join(_bloque_clima(condiciones))
+    )
+    if alertas_hoy:
+        explicacion += "\n\nAlertas para este momento:\n" + "\n".join(f"• {a}" for a in alertas_hoy)
+        recomendacion += " " + alertas_hoy[0]
+
+    return recomendacion, explicacion
+
+
 def _responder_fertilizacion(
     cultivo: str,
     semaforo: str,
@@ -767,6 +906,66 @@ def _responder_fumigacion(
     return recomendacion, explicacion
 
 
+SUB_INTENCION_TITULOS: dict[str, str] = {
+    "consulta_ventana": "¿Conviene hoy?",
+    "evaluacion_clima": "Evaluación actual",
+    "consulta_evitar_riego": "Qué NO hacer al regar",
+    "consulta_evitar_fertilizacion": "Qué NO hacer al fertilizar",
+    "consulta_epocas_siembra": "Peores épocas de siembra",
+    "consulta_plagas_zona": "Plagas en la zona",
+    "consulta_plagas_prevencion": "Plagas y prevención",
+}
+
+
+def _titulo_sub_intencion(tema: str, sub: str) -> str:
+    if sub in SUB_INTENCION_TITULOS:
+        return SUB_INTENCION_TITULOS[sub]
+    return TIPOS_EVALUACION.get(tema, tema).capitalize()
+
+
+def _generar_seccion_sub(
+    tema: str,
+    sub: str,
+    *,
+    cultivo: str,
+    semaforo: str,
+    condiciones: dict,
+    advertencias: list,
+    ubicacion: str | None,
+    texto: str | None,
+    producto: str | None,
+) -> tuple[str, str]:
+    if sub == "consulta_evitar_riego":
+        return _responder_riego_evitar(cultivo, condiciones, ubicacion)
+    if sub == "consulta_evitar_fertilizacion":
+        return _responder_fertilizacion_evitar(cultivo, condiciones, ubicacion)
+    if sub == "consulta_plagas_prevencion":
+        return _responder_plagas_prevencion(cultivo, ubicacion, condiciones)
+    if sub == "consulta_plagas_zona":
+        return _responder_plagas_zona(cultivo, ubicacion, condiciones)
+    if sub == "consulta_epocas_siembra":
+        return _responder_peores_epocas_siembra(cultivo, condiciones, advertencias, ubicacion)
+    if sub in ("consulta_ventana", "evaluacion_clima") and tema == "riego":
+        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    if sub in ("consulta_ventana", "evaluacion_clima") and tema == "fertilizacion":
+        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    if sub in ("consulta_ventana", "evaluacion_clima") and tema == "siembra":
+        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    if sub in ("consulta_ventana", "evaluacion_clima") and tema == "cosecha":
+        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    return _generar_seccion_tema(
+        tema,
+        cultivo=cultivo,
+        semaforo=semaforo,
+        condiciones=condiciones,
+        advertencias=advertencias,
+        ubicacion=ubicacion,
+        texto=texto,
+        producto=producto,
+        intencion=sub,
+    )
+
+
 def _generar_seccion_tema(
     tema: str,
     *,
@@ -780,9 +979,9 @@ def _generar_seccion_tema(
     intencion: str,
 ) -> tuple[str, str]:
     """Genera recomendación y explicación para un solo tema."""
-    sub = detectar_sub_intencion(texto, tema) if texto else intencion
-    if intencion not in ("evaluacion_clima", "consulta_multiple") and sub == "evaluacion_clima":
-        sub = intencion
+    sub = intencion
+    if intencion in ("evaluacion_clima", "consulta_multiple") and texto:
+        sub = detectar_sub_intencion(texto, tema)
 
     if tema == "plagas" and sub in ("consulta_plagas_zona", "consulta_plagas_prevencion"):
         if sub == "consulta_plagas_prevencion":
@@ -793,6 +992,9 @@ def _generar_seccion_tema(
 
     if tema == "fertilizacion" and sub == "consulta_evitar_fertilizacion":
         return _responder_fertilizacion_evitar(cultivo, condiciones, ubicacion)
+
+    if tema == "riego" and sub == "consulta_evitar_riego":
+        return _responder_riego_evitar(cultivo, condiciones, ubicacion)
 
     if tema == "siembra" and sub == "consulta_epocas_siembra":
         return _responder_peores_epocas_siembra(cultivo, condiciones, advertencias, ubicacion)
@@ -854,6 +1056,31 @@ def generar_respuestas(
     cites = fuentes_conocimiento or []
     ev_por_tema = evaluaciones_por_tema or {}
 
+    # Mismo tema, varias sub-intenciones (ej. ¿conviene regar hoy? + qué NO hacer al regar)
+    if texto and len(temas_consulta) == 1:
+        tema = temas_consulta[0]
+        subs = detectar_sub_intenciones(texto, tema)
+        if len(subs) > 1:
+            ev = ev_por_tema.get(tema, {})
+            partes_rec: list[str] = []
+            partes_exp: list[str] = ["Tu consulta tiene más de un enfoque. Te respondo cada parte:\n"]
+            for sub in subs:
+                rec_t, exp_t = _generar_seccion_sub(
+                    tema,
+                    sub,
+                    cultivo=cultivo,
+                    semaforo=ev.get("semaforo", semaforo),
+                    condiciones=condiciones,
+                    advertencias=ev.get("advertencias", advertencias),
+                    ubicacion=ubicacion,
+                    texto=texto,
+                    producto=producto,
+                )
+                titulo = _titulo_sub_intencion(tema, sub)
+                partes_rec.append(f"{titulo}: {_recortar(rec_t, 200)}")
+                partes_exp.append(f"—— {titulo} ——\n{exp_t}")
+            return _finalizar(" ".join(partes_rec), "\n\n".join(partes_exp), frags, cites)
+
     # Consulta con varios temas (ej. plagas + siembra)
     if len(temas_consulta) > 1 or intencion == "consulta_multiple":
         partes_rec: list[str] = []
@@ -897,6 +1124,10 @@ def generar_respuestas(
 
     if intencion == "consulta_evitar_fertilizacion":
         rec, exp = _responder_fertilizacion_evitar(cultivo, condiciones, ubicacion)
+        return _finalizar(rec, exp, frags, cites)
+
+    if intencion == "consulta_evitar_riego":
+        rec, exp = _responder_riego_evitar(cultivo, condiciones, ubicacion)
         return _finalizar(rec, exp, frags, cites)
 
     if tipo_evaluacion == "siembra":

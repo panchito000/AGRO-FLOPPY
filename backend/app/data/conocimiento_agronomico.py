@@ -39,6 +39,20 @@ RIEGO = {
         ],
         "frecuencia_referencia": "Cada 7–10 días en floración/llenado si no hay lluvia.",
         "mejor_horario": "Madrugada (4:00–8:00) o atardecer (17:00–19:00).",
+        "peores_practicas": [
+            "Regar al mediodía con sol fuerte: mucha evaporación y estrés foliar.",
+            "Riego superficial frecuente: raíces quedan en capa superior y el cultivo se debilita.",
+            "Regar con suelo ya encharcado: asfixia radicular y riesgo de enfermedades.",
+            "Regar justo antes de lluvia fuerte: desperdicio de agua y lixiviación de nutrientes.",
+            "Mojar follaje al atardecer sin secado: favorece hongos en hoja.",
+            "Aplicar caudal muy alto en suelo ligero: escorrentía sin infiltración.",
+        ],
+        "cuando_no": [
+            "Si el suelo ya tiene ≥65% de humedad.",
+            "Si hay lluvia prevista en las próximas 24–48 h (>40% probabilidad).",
+            "En horas de máximo calor (11:00–15:00) salvo emergencia extrema.",
+            "Con suelo compactado o encharcado — corregí drenaje antes de regar más.",
+        ],
     },
     "maiz": {
         "critico_etapas": ["VT–R1 (floración)", "R2–R3 (llenado de grano)"],
@@ -49,6 +63,18 @@ RIEGO = {
         ],
         "frecuencia_referencia": "Cada 5–8 días en VT–R3 con déficit hídrico.",
         "mejor_horario": "Madrugada o noche para reducir evaporación.",
+        "peores_practicas": [
+            "Regar en pleno mediodía: evaporación alta y menor eficiencia.",
+            "Riegos muy livianos y seguidos: raíz superficial sin profundidad.",
+            "Regar sin revisar pronóstico de lluvia: duplicás costo sin beneficio.",
+            "Encharcar surcos en VT–R1: estrés radicular en etapa crítica.",
+            "Regar con caudal desparejo: zonas secas y otras anegadas en el mismo lote.",
+        ],
+        "cuando_no": [
+            "Suelo húmedo a 20 cm — esperá signos de estrés antes de regar de nuevo.",
+            "Lluvia probable en 24–48 h.",
+            "Mediodía con temp >32°C (salvo riego de emergencia al amanecer).",
+        ],
     },
 }
 
