@@ -108,7 +108,6 @@ body {
   font-weight: 700;
   font-size: 1.125rem;
   letter-spacing: -0.02em;
-  color: var(--color-green-700);
 }
 
 .header__tagline {
@@ -127,7 +126,6 @@ body {
   letter-spacing: -0.03em;
   line-height: 1.2;
   margin-bottom: 0.75rem;
-  color: var(--color-green-800);
 }
 
 .hero__subtitle {
@@ -169,10 +167,6 @@ body {
   border-color: var(--color-green-200);
   border-top: 3px solid var(--color-green-600);
   background: linear-gradient(180deg, #fafffe 0%, var(--color-white) 2.5rem);
-}
-
-.card--form > .card__title {
-  color: var(--color-green-700);
 }
 
 @media (max-width: 899px) {
@@ -1016,7 +1010,6 @@ body.map-modal-open {
   font-size: 1.375rem;
   font-weight: 700;
   margin-bottom: 0.5rem;
-  color: var(--color-green-800);
 }
 
 .auth-card__subtitle {
