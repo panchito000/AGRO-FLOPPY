@@ -333,8 +333,8 @@ def _recortar(texto: str, max_len: int = 240) -> str:
 def _bloque_kb(fragmentos: list[FragmentoConocimiento]) -> str:
     if not fragmentos:
         return ""
-    lineas = ["\n\nDe nuestra base documental:"]
-    for fr in fragmentos[:2]:
+    lineas = ["\n\nInformación de referencia (documentos y guías):"]
+    for fr in fragmentos[:3]:
         txt = fr.contenido
         if txt.startswith("{"):
             try:
@@ -348,7 +348,8 @@ def _bloque_kb(fragmentos: list[FragmentoConocimiento]) -> str:
                     txt = "; ".join(partes)
             except json.JSONDecodeError:
                 pass
-        lineas.append(f"• {_recortar(txt, 200)}")
+        prefijo = "→ " if fr.documento_tipo == "faq" else "• "
+        lineas.append(f"{prefijo}{_recortar(txt, 280)}")
     return "\n".join(lineas)
 
 

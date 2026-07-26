@@ -1,0 +1,65 @@
+[
+  {
+    "archivo": "2025-3107d-9-1-Fichas-Municipales-Dpto-Santa-Cruz-2024V2.pdf",
+    "slug": "fichas-municipales-santa-cruz",
+    "titulo": "Fichas Municipales Santa Cruz 2024",
+    "fuente_cita": "Fichas Municipales Dpto. Santa Cruz 2024 (INE)",
+    "etiquetas": ["santa_cruz", "municipios", "agropecuario"],
+    "cultivo_default": null,
+    "max_paginas": 120
+  },
+  {
+    "archivo": "Santa-Cruz.pdf",
+    "slug": "santa-cruz-riquezas-bolivia",
+    "titulo": "Enciclopedia Agropecuaria Santa Cruz",
+    "fuente_cita": "Riquezas de Bolivia — Santa Cruz (2020)",
+    "etiquetas": ["santa_cruz", "soya", "anapo", "agropecuario"],
+    "cultivo_default": "soya",
+    "max_paginas": 250
+  },
+  {
+    "archivo": "frontera-agricola-soyera-cipca.pdf",
+    "slug": "frontera-soyera-cipca",
+    "titulo": "Dinámica frontera agrícola soyera en Santa Cruz",
+    "fuente_cita": "CIPCA — Sheyla Martínez, Mundos Rurales 2020",
+    "etiquetas": ["soya", "santa_cruz", "siembra_directa", "suelos", "plagas"],
+    "cultivo_default": "soya",
+    "max_paginas": null
+  },
+  {
+    "archivo": "Soya-desarrollo-tecnologico-garantiza-produccion-alimentos.pdf",
+    "slug": "soya-desarrollo-tecnologico",
+    "titulo": "Soya: desarrollo tecnológico y producción de alimentos",
+    "fuente_cita": "Publicación técnica soya Bolivia",
+    "etiquetas": ["soya", "tecnologia", "produccion"],
+    "cultivo_default": "soya",
+    "max_paginas": 150
+  },
+  {
+    "archivo": "ESTADISTICAS-ANAPO-2025.pdf",
+    "slug": "estadisticas-anapo-2025",
+    "titulo": "Estadísticas ANAPO 2025",
+    "fuente_cita": "ANAPO — Estadísticas de campaña 2025",
+    "etiquetas": ["anapo", "soya", "estadisticas", "superficie"],
+    "cultivo_default": "soya",
+    "max_paginas": 100
+  },
+  {
+    "archivo": "Santa-Cruz-riquezas-bolivia.md",
+    "slug": "santa-cruz-riquezas-md",
+    "titulo": "Enciclopedia Agropecuaria Santa Cruz (texto)",
+    "fuente_cita": "Riquezas de Bolivia — Santa Cruz (2020)",
+    "etiquetas": ["santa_cruz", "soya", "anapo"],
+    "cultivo_default": "soya",
+    "tipo": "markdown"
+  },
+  {
+    "archivo": "frontera-agricola-soyera-cipca.md",
+    "slug": "frontera-soyera-cipca-md",
+    "titulo": "Frontera agrícola soyera CIPCA (texto)",
+    "fuente_cita": "CIPCA — Sheyla Martínez, Mundos Rurales 2020",
+    "etiquetas": ["soya", "siembra_directa", "plagas", "fertilizacion"],
+    "cultivo_default": "soya",
+    "tipo": "markdown"
+  }
+]

@@ -20,6 +20,30 @@ INDEX_PATH = Path(__file__).resolve().parents[1] / "data" / "conocimiento_index.
 STOPWORDS = {
     "que", "qué", "como", "cómo", "para", "con", "del", "las", "los", "una", "uno",
     "por", "esta", "este", "zona", "puede", "puedo", "decir", "sobre", "hay", "tiene",
+    "quiero", "saber", "hablar", "hablame", "cosas", "hora", "hoy", "esta",
+}
+
+SINONIMOS_BUSQUEDA = {
+    "regar": "riego",
+    "regando": "riego",
+    "sembrar": "siembra",
+    "sembrando": "siembra",
+    "plantar": "siembra",
+    "fertilizar": "fertilizacion",
+    "abonar": "fertilizacion",
+    "cosechar": "cosecha",
+    "plaga": "plagas",
+    "plagas": "plagas",
+    "prevenir": "plagas",
+    "prevencion": "plagas",
+    "insectos": "plagas",
+    "enfermedades": "plagas",
+    "epocas": "siembra",
+    "epoca": "siembra",
+    "evitar": "evitar",
+    "anapo": "anapo",
+    "suelo": "suelo",
+    "directa": "siembra",
 }
 
 
@@ -41,7 +65,34 @@ def _normalizar(texto: str) -> str:
 def _tokens(texto: str | None) -> set[str]:
     if not texto:
         return set()
-    return {t for t in _normalizar(texto).split() if len(t) > 2 and t not in STOPWORDS}
+    base = {t for t in _normalizar(texto).split() if len(t) > 2 and t not in STOPWORDS}
+    extra: set[str] = set()
+    for t in base:
+        if t in SINONIMOS_BUSQUEDA:
+            extra.add(SINONIMOS_BUSQUEDA[t])
+    return base | extra
+
+
+def _score_faq(chunk: dict, texto: str | None, cultivo: str, tipo_evaluacion: str) -> float:
+    if chunk.get("documento_tipo") != "faq":
+        return 0.0
+    meta = chunk.get("metadata") or {}
+    patrones = meta.get("patrones") or chunk.get("etiquetas") or []
+    if not texto:
+        return 0.0
+    t = _normalizar(texto)
+    score = 0.0
+    for p in patrones:
+        pn = _normalizar(p)
+        if pn in t or all(part in t for part in pn.split() if len(part) > 3):
+            score += 8.0
+        elif any(part in t for part in pn.split() if len(part) > 4):
+            score += 4.0
+    if chunk.get("cultivo") == cultivo:
+        score += 3.0
+    if chunk.get("tipo_evaluacion") == tipo_evaluacion:
+        score += 4.0
+    return score
 
 
 def _score_chunk(
@@ -49,8 +100,14 @@ def _score_chunk(
     tokens: set[str],
     cultivo: str,
     tipo_evaluacion: str,
+    texto_original: str | None = None,
 ) -> float:
     score = 0.0
+    if chunk.get("documento_tipo") == "faq":
+        faq_score = _score_faq(chunk, texto_original, cultivo, tipo_evaluacion)
+        if faq_score > 0:
+            return faq_score
+
     contenido = _normalizar(chunk.get("contenido", ""))
     chunk_tokens = set(contenido.split())
 
@@ -101,7 +158,7 @@ def _buscar_en_lista(
 
     scored: list[tuple[float, dict]] = []
     for ch in chunks:
-        s = _score_chunk(ch, tokens, cultivo, tipo_evaluacion)
+        s = _score_chunk(ch, tokens, cultivo, tipo_evaluacion, texto)
         if s > 0:
             scored.append((s, ch))
 
@@ -121,6 +178,11 @@ def _buscar_en_lista(
             continue
         seen.add(key)
         meta = ch.get("metadata") or {}
+        if isinstance(meta, str):
+            try:
+                meta = json.loads(meta)
+            except json.JSONDecodeError:
+                meta = {}
         result.append(
             FragmentoConocimiento(
                 contenido=ch["contenido"],
@@ -168,6 +230,7 @@ def _buscar_en_db(
             "cultivo": chunk.cultivo,
             "tipo_evaluacion": chunk.tipo_evaluacion,
             "etiquetas": chunk.etiquetas or [],
+            "metadata": chunk.metadata or {},
         })
     return _buscar_en_lista(chunks, cultivo=cultivo, tipo_evaluacion=tipo_evaluacion, texto=texto, limit=limit)
 

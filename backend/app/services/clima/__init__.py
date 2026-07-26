@@ -356,7 +356,7 @@ def evaluar_agronomico(
         tipos_evaluacion=temas,
         texto=texto,
         db=db,
-        limit_por_tipo=2,
+        limit_por_tipo=3,
     )
     fuentes_info = formatear_fuentes(
         fuentes_clima_list=fuentes_clima(clima["fuentes_usadas"]),

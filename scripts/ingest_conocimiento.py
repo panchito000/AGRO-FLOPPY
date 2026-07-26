@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Ingesta Excel/PDF de Saul → Supabase + conocimiento_index.json (fallback Vercel)."""
+"""Ingesta Excel/PDF/Markdown de Saul → Supabase + conocimiento_index.json (fallback Vercel)."""
 
 from __future__ import annotations
 
@@ -9,14 +9,18 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "Saul" / "Data"
+MANIFEST_PATH = DATA_DIR / "documentos_manifest.json"
 INDEX_PATH = ROOT / "backend" / "app" / "data" / "conocimiento_index.json"
 
 TIPO_MAP = {
     "siembra": "siembra",
     "temp": "siembra",
     "germin": "siembra",
+    "sembr": "siembra",
     "lluvia": "riego",
     "riego": "riego",
+    "regar": "riego",
     "hídri": "riego",
     "hidri": "riego",
     "fertil": "fertilizacion",
@@ -26,11 +30,15 @@ TIPO_MAP = {
     "roya": "plagas",
     "fung": "plagas",
     "herbic": "plagas",
+    "maleza": "plagas",
     "cosecha": "cosecha",
     "grano": "cosecha",
     "viento": "plagas",
     "glifosato": "plagas",
     "2,4-d": "plagas",
+    "suelo": "siembra",
+    "deforest": "siembra",
+    "compact": "siembra",
 }
 
 
@@ -63,7 +71,7 @@ def _infer_tipo_evaluacion(texto: str) -> str | None:
     return None
 
 
-def _chunk_text(text: str, size: int = 450, overlap: int = 80) -> list[str]:
+def _chunk_text(text: str, size: int = 480, overlap: int = 90) -> list[str]:
     text = re.sub(r"\s+", " ", text).strip()
     if not text:
         return []
@@ -80,6 +88,50 @@ def _chunk_text(text: str, size: int = 450, overlap: int = 80) -> list[str]:
     return chunks
 
 
+def _limpiar_markdown(texto: str) -> str:
+    texto = re.sub(r"^#+\s*", "", texto, flags=re.MULTILINE)
+    texto = re.sub(r"\|[^|\n]+\|", " ", texto)
+    texto = re.sub(r"!\[[^\]]*\]\([^)]+\)", " ", texto)
+    texto = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", texto)
+    texto = re.sub(r"---+", " ", texto)
+    texto = re.sub(r"\n{3,}", "\n\n", texto)
+    return texto
+
+
+def _agregar_chunks_documento(
+    chunks: list[dict],
+    *,
+    texto: str,
+    doc_slug: str,
+    doc_titulo: str,
+    doc_tipo: str,
+    ruta_origen: str,
+    fuente_cita: str,
+    etiquetas_base: list[str],
+    cultivo_default: str | None,
+) -> None:
+    for piece in _chunk_text(texto):
+        lower = piece.lower()
+        cultivo = cultivo_default or _norm_cultivo(piece)
+        tipo_ev = _infer_tipo_evaluacion(piece)
+        etiquetas = list(etiquetas_base)
+        if "agricol" in lower:
+            etiquetas.append("agricola")
+        if "ganader" in lower:
+            etiquetas.append("ganadera")
+        chunks.append({
+            "documento_slug": doc_slug,
+            "documento_titulo": doc_titulo,
+            "documento_tipo": doc_tipo,
+            "ruta_origen": ruta_origen,
+            "cultivo": cultivo,
+            "tipo_evaluacion": tipo_ev,
+            "etiquetas": etiquetas,
+            "contenido": piece,
+            "fuente_cita": fuente_cita,
+        })
+
+
 def ingest_excel(chunks: list[dict]) -> None:
     try:
         import openpyxl
@@ -87,7 +139,7 @@ def ingest_excel(chunks: list[dict]) -> None:
         print("AVISO: openpyxl no instalado, omitiendo Excel.")
         return
 
-    xlsx = ROOT / "Saul" / "Data" / "Cosecha_Parametros.xlsx"
+    xlsx = DATA_DIR / "Cosecha_Parametros.xlsx"
     if not xlsx.exists():
         print(f"AVISO: No se encontró {xlsx}")
         return
@@ -135,47 +187,106 @@ def ingest_excel(chunks: list[dict]) -> None:
             })
 
 
-def ingest_fichas_pdf(chunks: list[dict], max_pages: int = 80) -> None:
+def ingest_pdf_archivo(
+    chunks: list[dict],
+    pdf_path: Path,
+    meta: dict,
+) -> None:
     try:
         from pypdf import PdfReader
     except ImportError:
         print("AVISO: pypdf no instalado, omitiendo PDF.")
         return
 
-    pdf = ROOT / "Saul" / "Data" / "2025-3107d-9-1-Fichas-Municipales-Dpto-Santa-Cruz-2024V2.pdf"
-    if not pdf.exists() or pdf.stat().st_size == 0:
-        print(f"AVISO: PDF no disponible {pdf}")
+    if not pdf_path.exists() or pdf_path.stat().st_size == 0:
+        print(f"AVISO: PDF no disponible {pdf_path}")
         return
 
-    reader = PdfReader(str(pdf))
-    doc_slug = "fichas-municipales-santa-cruz"
-    full_text_parts: list[str] = []
-
-    for i, page in enumerate(reader.pages[:max_pages]):
+    reader = PdfReader(str(pdf_path))
+    max_pages = meta.get("max_paginas")
+    pages = reader.pages[:max_pages] if max_pages else reader.pages
+    partes: list[str] = []
+    for page in pages:
         text = page.extract_text() or ""
         if text.strip():
-            full_text_parts.append(text)
+            partes.append(text)
 
-    combined = "\n".join(full_text_parts)
-    for i, piece in enumerate(_chunk_text(combined, size=500)):
-        lower = piece.lower()
-        cultivo = "soya" if "soya" in lower or "soja" in lower else ("maiz" if "maíz" in lower or "maiz" in lower else None)
-        tipo_ev = _infer_tipo_evaluacion(piece)
-        etiquetas = ["santa_cruz", "municipios"]
-        if "agricol" in lower:
-            etiquetas.append("agricola")
-        if "ganader" in lower:
-            etiquetas.append("ganadera")
+    combined = "\n".join(partes)
+    if len(combined.strip()) < 100:
+        print(f"AVISO: PDF con poco texto extraíble {pdf_path.name}")
+        return
+
+    _agregar_chunks_documento(
+        chunks,
+        texto=combined,
+        doc_slug=meta["slug"],
+        doc_titulo=meta["titulo"],
+        doc_tipo="pdf",
+        ruta_origen=str(pdf_path.relative_to(ROOT)),
+        fuente_cita=meta["fuente_cita"],
+        etiquetas_base=meta.get("etiquetas", []),
+        cultivo_default=meta.get("cultivo_default"),
+    )
+    print(f"  PDF: {pdf_path.name} → {len(partes)} páginas")
+
+
+def ingest_markdown_archivo(
+    chunks: list[dict],
+    md_path: Path,
+    meta: dict,
+) -> None:
+    if not md_path.exists():
+        print(f"AVISO: Markdown no encontrado {md_path}")
+        return
+    texto = _limpiar_markdown(md_path.read_text(encoding="utf-8"))
+    _agregar_chunks_documento(
+        chunks,
+        texto=texto,
+        doc_slug=meta["slug"],
+        doc_titulo=meta["titulo"],
+        doc_tipo="markdown",
+        ruta_origen=str(md_path.relative_to(ROOT)),
+        fuente_cita=meta["fuente_cita"],
+        etiquetas_base=meta.get("etiquetas", []),
+        cultivo_default=meta.get("cultivo_default"),
+    )
+    print(f"  MD: {md_path.name}")
+
+
+def ingest_documentos_manifest(chunks: list[dict]) -> None:
+    if not MANIFEST_PATH.exists():
+        print(f"AVISO: Sin manifiesto {MANIFEST_PATH}")
+        return
+
+    manifest = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
+    print(f"Ingestando {len(manifest)} documentos desde manifiesto…")
+    for meta in manifest:
+        archivo = DATA_DIR / meta["archivo"]
+        if meta.get("tipo") == "markdown":
+            ingest_markdown_archivo(chunks, archivo, meta)
+        else:
+            ingest_pdf_archivo(chunks, archivo, meta)
+
+
+def ingest_faq(chunks: list[dict]) -> None:
+    from app.data.faq_agronomico import FAQ_AGRONOMICO
+
+    for i, faq in enumerate(FAQ_AGRONOMICO):
         chunks.append({
-            "documento_slug": doc_slug,
-            "documento_titulo": "Fichas Municipales Santa Cruz 2024",
-            "documento_tipo": "pdf",
-            "ruta_origen": str(pdf.relative_to(ROOT)),
-            "cultivo": cultivo,
-            "tipo_evaluacion": tipo_ev,
-            "etiquetas": etiquetas,
-            "contenido": piece,
-            "fuente_cita": "Fichas Municipales Dpto. Santa Cruz 2024 (INE/official)",
+            "documento_slug": "faq-agronomico",
+            "documento_titulo": "Preguntas frecuentes Zafra AI",
+            "documento_tipo": "faq",
+            "ruta_origen": "backend/app/data/faq_agronomico.py",
+            "cultivo": faq.get("cultivo"),
+            "tipo_evaluacion": faq.get("tipo_evaluacion"),
+            "etiquetas": ["faq"] + faq.get("pregunta_patrones", [])[:5],
+            "contenido": faq["respuesta"],
+            "fuente_cita": faq.get("fuente", "FAQ Zafra AI"),
+            "metadata": {
+                "documento_titulo": "Preguntas frecuentes Zafra AI",
+                "faq_id": i,
+                "patrones": faq.get("pregunta_patrones", []),
+            },
         })
 
 
@@ -221,6 +332,9 @@ def ingest_codigo_base(chunks: list[dict]) -> None:
             })
 
 
+TIPO_DB_MAP = {"markdown": "pdf", "faq": "codigo"}
+
+
 def persist_supabase(chunks: list[dict], database_url: str) -> None:
     import psycopg2
     from psycopg2.extras import Json
@@ -252,7 +366,7 @@ def persist_supabase(chunks: list[dict], database_url: str) -> None:
                     (
                         slug,
                         sample["documento_titulo"],
-                        sample["documento_tipo"],
+                        TIPO_DB_MAP.get(sample["documento_tipo"], sample["documento_tipo"]),
                         sample.get("ruta_origen"),
                         f"Ingesta automática — {slug}",
                     ),
@@ -273,7 +387,7 @@ def persist_supabase(chunks: list[dict], database_url: str) -> None:
                         ch.get("etiquetas") or [],
                         ch["contenido"],
                         ch.get("fuente_cita"),
-                        Json({"documento_titulo": ch["documento_titulo"]}),
+                        Json(ch.get("metadata") or {"documento_titulo": ch["documento_titulo"]}),
                     ),
                 )
         conn.commit()
@@ -288,12 +402,13 @@ def persist_supabase(chunks: list[dict], database_url: str) -> None:
 def write_index(chunks: list[dict]) -> None:
     INDEX_PATH.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "version": 1,
+        "version": 2,
         "total_chunks": len(chunks),
         "chunks": chunks,
     }
     INDEX_PATH.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"Índice local: {INDEX_PATH} ({len(chunks)} chunks)")
+    size_mb = INDEX_PATH.stat().st_size / (1024 * 1024)
+    print(f"Índice local: {INDEX_PATH} ({len(chunks)} chunks, {size_mb:.2f} MB)")
 
 
 def main() -> int:
@@ -301,7 +416,8 @@ def main() -> int:
     chunks: list[dict] = []
 
     ingest_excel(chunks)
-    ingest_fichas_pdf(chunks)
+    ingest_documentos_manifest(chunks)
+    ingest_faq(chunks)
     ingest_codigo_base(chunks)
 
     if not chunks:

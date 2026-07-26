@@ -3,8 +3,12 @@
 ## Qué incluye
 
 - **Excel:** `Saul/Data/Cosecha_Parametros.xlsx` (parámetros validados por Saul)
-- **PDF:** Fichas Municipales Santa Cruz 2024
+- **PDFs:** Fichas Municipales, Santa Cruz (Riquezas de Bolivia), CIPCA frontera soyera, ANAPO 2025, soya tecnológica
+- **Markdown:** versiones texto de Santa Cruz y CIPCA (mejor calidad de búsqueda)
+- **FAQ:** `backend/app/data/faq_agronomico.py` — respuestas curadas a preguntas frecuentes
 - **Código:** catálogo de plagas y guías por tipo de evaluación
+
+Manifiesto de documentos: `Saul/Data/documentos_manifest.json`
 
 ## Clima vs. agronomía (de dónde salen los datos)
 
@@ -28,7 +32,7 @@ No existe una API pública gratuita equivalente al clima para “plagas en vivo�
 
 ## Ingestar / actualizar
 
-1. Copiá los archivos a `Saul/Data/` (o rutas que use `scripts/ingest_conocimiento.py`)
+1. Colocá PDFs en `Saul/Data/` y actualizá `Saul/Data/documentos_manifest.json` si agregás archivos nuevos
 2. Ejecutá:
 
 ```bash
