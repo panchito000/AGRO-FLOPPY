@@ -169,6 +169,25 @@ function stopRecording() {
   btnDetener.disabled = true;
 }
 
+function formatTextoHumano(texto) {
+  if (!texto) return "";
+  const escaped = String(texto)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return escaped
+    .split("\n")
+    .map((line) => {
+      const trimmed = line.trim();
+      if (!trimmed) return "";
+      if (trimmed.startsWith("•")) {
+        return `<p class="result-bullet">${trimmed}</p>`;
+      }
+      return `<p>${trimmed}</p>`;
+    })
+    .join("");
+}
+
 function showResults(data) {
   const semaforo = data.semaforo || "amarillo";
   const semaforoLabels = { verde: "Favorable", amarillo: "Precaución", rojo: "No recomendado" };
@@ -210,7 +229,7 @@ function showResults(data) {
     <p><strong>Evaluación:</strong> ${formatTipo(data.tipo_evaluacion)}</p>
     <p><strong>Ubicación:</strong> ${data.ubicacion}</p>
     ${data.producto_evaluado ? `<p><strong>Producto:</strong> ${data.producto_evaluado}</p>` : ""}
-    <p class="result-highlight">${data.recomendacion || "Sin recomendación disponible."}</p>
+    <div class="result-highlight">${formatTextoHumano(data.recomendacion) || "<p>Sin recomendación disponible.</p>"}</div>
     ${data.evaluacion_id ? `<p class="result-meta">ID evaluación: ${data.evaluacion_id}</p>` : ""}
   `;
 
@@ -218,7 +237,7 @@ function showResults(data) {
   const expPlaceholder = resultCards.explicacion.querySelector(".card__placeholder");
   if (expPlaceholder) expPlaceholder.hidden = true;
   resultContents.explicacion.innerHTML = `
-    <p>${data.explicacion || data.mensaje || "Sin explicación disponible."}</p>
+    ${formatTextoHumano(data.explicacion || data.mensaje || "Sin explicación disponible.")}
     ${data.texto ? `<p class="result-meta"><strong>Notas:</strong> ${data.texto}</p>` : ""}
     ${data.audio_recibido ? `<p class="result-meta"><strong>Audio:</strong> ${data.audio_nombre}</p>` : ""}
   `;

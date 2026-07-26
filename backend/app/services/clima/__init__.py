@@ -12,6 +12,7 @@ from app.services.clima.datos_agronomicos import (
     evaluar_fumigacion,
     evaluar_siembra,
 )
+from app.services.respuestas_agronomicas import detectar_intencion, generar_respuestas
 
 
 def _promedio(valores: list[float]) -> float | None:
@@ -125,7 +126,7 @@ def _unificar_condiciones(fuentes: dict) -> dict:
     }
 
 
-def _detectar_producto(texto: str | None) -> str:
+def _detectar_producto(texto: str | None) -> str | None:
     if texto:
         producto = buscar_producto(texto)
         if producto:
@@ -134,7 +135,107 @@ def _detectar_producto(texto: str | None) -> str:
         for key in PRODUCTOS:
             if key in texto_lower or PRODUCTOS[key]["nombre"].lower() in texto_lower:
                 return PRODUCTOS[key]["nombre"]
-    return "Glifosato"
+    return None
+
+
+def _evaluar_riego(condiciones: dict) -> dict:
+    advertencias = []
+    humedad_suelo = condiciones.get("humedad_suelo_pct")
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+
+    if prob_lluvia > 50:
+        advertencias.append({
+            "tipo": "lluvia",
+            "severidad": "alta",
+            "mensaje": f"Lluvia probable ({prob_lluvia}%) — el riego puede ser innecesario.",
+        })
+    if humedad_suelo is not None and humedad_suelo >= 65:
+        advertencias.append({
+            "tipo": "suelo_humedo",
+            "severidad": "media",
+            "mensaje": f"Suelo con buena humedad ({humedad_suelo}%) — no hace falta regar ahora.",
+        })
+    if humedad_suelo is not None and humedad_suelo < 45:
+        advertencias.append({
+            "tipo": "deficit_hidrico",
+            "severidad": "alta",
+            "mensaje": f"Suelo seco ({humedad_suelo}%) — posible necesidad de riego.",
+        })
+
+    if any(a["tipo"] == "lluvia" for a in advertencias):
+        return {"veredicto": "ESPERAR", "semaforo": "rojo", "advertencias": advertencias}
+    if any(a["tipo"] == "deficit_hidrico" for a in advertencias):
+        return {"veredicto": "REGAR", "semaforo": "verde", "advertencias": advertencias}
+    if advertencias:
+        return {"veredicto": "MONITOREAR", "semaforo": "amarillo", "advertencias": advertencias}
+    return {"veredicto": "ESTABLE", "semaforo": "verde", "advertencias": []}
+
+
+def _evaluar_fertilizacion(condiciones: dict) -> dict:
+    advertencias = []
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+    viento = condiciones.get("viento_kmh", 0) or 0
+
+    if prob_lluvia > 30:
+        advertencias.append({
+            "tipo": "lluvia",
+            "severidad": "alta",
+            "mensaje": f"Lluvia prevista ({prob_lluvia}%) — riesgo de lixiviación del fertilizante.",
+        })
+    if viento > 18:
+        advertencias.append({
+            "tipo": "viento",
+            "severidad": "media",
+            "mensaje": f"Viento {viento} km/h — posible deriva o volatilización.",
+        })
+
+    if any(a["severidad"] == "alta" for a in advertencias):
+        return {"veredicto": "ESPERAR", "semaforo": "rojo", "advertencias": advertencias}
+    if advertencias:
+        return {"veredicto": "PRECAUCION", "semaforo": "amarillo", "advertencias": advertencias}
+    return {"veredicto": "FAVORABLE", "semaforo": "verde", "advertencias": []}
+
+
+def _evaluar_cosecha(condiciones: dict) -> dict:
+    advertencias = []
+    prob_lluvia = condiciones.get("prob_lluvia_pct", 0) or 0
+    humedad = condiciones.get("humedad_pct", 0) or 0
+
+    if prob_lluvia > 50:
+        advertencias.append({
+            "tipo": "lluvia",
+            "severidad": "alta",
+            "mensaje": f"Lluvia probable ({prob_lluvia}%) — complica secado y calidad de grano.",
+        })
+    if humedad > 85:
+        advertencias.append({
+            "tipo": "humedad",
+            "severidad": "media",
+            "mensaje": f"Humedad ambiental alta ({humedad}%) — verificar humedad de grano en campo.",
+        })
+
+    if any(a["severidad"] == "alta" for a in advertencias):
+        return {"veredicto": "ESPERAR", "semaforo": "rojo", "advertencias": advertencias}
+    if advertencias:
+        return {"veredicto": "PRECAUCION", "semaforo": "amarillo", "advertencias": advertencias}
+    return {"veredicto": "FAVORABLE", "semaforo": "verde", "advertencias": []}
+
+
+def _aplicar_evaluacion(resultado: dict, evaluacion: dict, *, error_tipo: str = "general") -> None:
+    if evaluacion.get("error"):
+        resultado["advertencias"] = [{
+            "tipo": error_tipo,
+            "severidad": "alta",
+            "mensaje": evaluacion["error"],
+        }]
+        resultado["veredicto"] = "NO_APLICA"
+        resultado["semaforo"] = "rojo"
+    else:
+        resultado["veredicto"] = evaluacion["veredicto"]
+        resultado["semaforo"] = evaluacion["semaforo"]
+        resultado["advertencias"] = evaluacion.get("advertencias", [])
+        if evaluacion.get("producto"):
+            resultado["producto_evaluado"] = evaluacion["producto"]
 
 
 def evaluar_agronomico(
@@ -149,6 +250,7 @@ def evaluar_agronomico(
     """Combina clima en vivo con reglas agronómicas de Saul."""
     clima = obtener_clima_consolidado(lat, lon)
     condiciones = clima["condiciones_unificadas"]
+    intencion = detectar_intencion(texto, tipo_evaluacion)
 
     resultado = {
         "condiciones_actuales": condiciones,
@@ -159,6 +261,7 @@ def evaluar_agronomico(
         "advertencias": [],
         "recomendacion": None,
         "explicacion": None,
+        "intencion_detectada": intencion,
     }
 
     if not clima["fuentes_usadas"]:
@@ -167,116 +270,54 @@ def evaluar_agronomico(
             "severidad": "alta",
             "mensaje": "No se pudo obtener clima de ninguna fuente disponible.",
         }]
-        resultado["recomendacion"] = "Reintentá en unos minutos. No hay datos climáticos confiables."
-        resultado["explicacion"] = "Todas las fuentes de clima fallaron en esta consulta."
+        resultado["recomendacion"] = (
+            "No tengo datos climáticos confiables en este momento. "
+            "Reintentá en unos minutos o consultá el pronóstico local."
+        )
+        resultado["explicacion"] = (
+            "Todas las fuentes de clima fallaron en esta consulta. "
+            "Sin esos datos no puedo darte una recomendación segura."
+        )
         return resultado
 
-    if tipo_evaluacion == "plagas":
+    producto = None
+    if intencion == "consulta_plagas_zona":
+        resultado["veredicto"] = "INFORMATIVO"
+        resultado["semaforo"] = "amarillo"
+        resultado["advertencias"] = []
+    elif tipo_evaluacion == "plagas":
         producto = _detectar_producto(texto)
-        evaluacion = evaluar_fumigacion(producto, condiciones)
-        if evaluacion.get("error"):
-            resultado["advertencias"] = [{
-                "tipo": "producto",
-                "severidad": "alta",
-                "mensaje": evaluacion["error"],
-            }]
-            resultado["veredicto"] = "NO_SEGURO"
-            resultado["semaforo"] = "rojo"
+        if producto:
+            _aplicar_evaluacion(resultado, evaluar_fumigacion(producto, condiciones), error_tipo="producto")
         else:
-            resultado["veredicto"] = evaluacion["veredicto"]
-            resultado["semaforo"] = evaluacion["semaforo"]
-            resultado["advertencias"] = evaluacion.get("advertencias", [])
-            resultado["producto_evaluado"] = evaluacion.get("producto")
+            intencion = "consulta_plagas_zona"
+            resultado["intencion_detectada"] = intencion
+            resultado["veredicto"] = "INFORMATIVO"
+            resultado["semaforo"] = "amarillo"
+            resultado["advertencias"] = []
+    elif tipo_evaluacion == "siembra":
+        _aplicar_evaluacion(resultado, evaluar_siembra(cultivo, condiciones), error_tipo="cultivo")
+    elif tipo_evaluacion == "riego":
+        _aplicar_evaluacion(resultado, _evaluar_riego(condiciones))
+    elif tipo_evaluacion == "fertilizacion":
+        _aplicar_evaluacion(resultado, _evaluar_fertilizacion(condiciones))
+    elif tipo_evaluacion == "cosecha":
+        _aplicar_evaluacion(resultado, _evaluar_cosecha(condiciones))
     else:
-        evaluacion = evaluar_siembra(cultivo, condiciones)
-        if evaluacion.get("error"):
-            resultado["advertencias"] = [{
-                "tipo": "cultivo",
-                "severidad": "alta",
-                "mensaje": evaluacion["error"],
-            }]
-            resultado["veredicto"] = "DESFAVORABLE"
-            resultado["semaforo"] = "rojo"
-        else:
-            resultado["veredicto"] = evaluacion["veredicto"]
-            resultado["semaforo"] = evaluacion["semaforo"]
-            resultado["advertencias"] = evaluacion.get("advertencias", [])
+        _aplicar_evaluacion(resultado, evaluar_siembra(cultivo, condiciones), error_tipo="cultivo")
 
-    resultado["recomendacion"] = _generar_recomendacion(
-        tipo_evaluacion=tipo_evaluacion,
+    resultado["recomendacion"], resultado["explicacion"] = generar_respuestas(
         cultivo=cultivo,
-        veredicto=resultado["veredicto"],
+        tipo_evaluacion=tipo_evaluacion,
         semaforo=resultado["semaforo"],
-        condiciones=condiciones,
-        advertencias=resultado["advertencias"],
-        ubicacion=ubicacion_nombre,
-    )
-    resultado["explicacion"] = _generar_explicacion(
-        tipo_evaluacion=tipo_evaluacion,
-        cultivo=cultivo,
+        veredicto=resultado["veredicto"],
         condiciones=condiciones,
         advertencias=resultado["advertencias"],
         fuentes=clima["fuentes_usadas"],
+        ubicacion=ubicacion_nombre,
+        texto=texto,
+        producto=resultado.get("producto_evaluado") or producto,
+        intencion=resultado.get("intencion_detectada"),
     )
     resultado["clima_completo"] = clima
     return resultado
-
-
-def _generar_recomendacion(
-    *,
-    tipo_evaluacion: str,
-    cultivo: str,
-    veredicto: str,
-    semaforo: str,
-    condiciones: dict,
-    advertencias: list[dict],
-    ubicacion: str | None,
-) -> str:
-    accion = "fumigar" if tipo_evaluacion == "plagas" else tipo_evaluacion
-    lugar = f" en {ubicacion}" if ubicacion else ""
-
-    if semaforo == "rojo":
-        principal = advertencias[0]["mensaje"] if advertencias else "Condiciones desfavorables."
-        return f"No se recomienda {accion}{lugar} hoy. {principal}"
-
-    if semaforo == "amarillo":
-        detalle = "; ".join(a["mensaje"] for a in advertencias[:2]) if advertencias else "Condiciones marginales."
-        return f"Precaución al {accion}{lugar}. {detalle}"
-
-    temp = condiciones.get("temperatura_c")
-    viento = condiciones.get("viento_kmh")
-    humedad = condiciones.get("humedad_pct")
-    return (
-        f"Condiciones favorables para {accion} de {cultivo}{lugar}. "
-        f"Temp {temp}°C, viento {viento} km/h, humedad {humedad}%."
-    )
-
-
-def _generar_explicacion(
-    *,
-    tipo_evaluacion: str,
-    cultivo: str,
-    condiciones: dict,
-    advertencias: list[dict],
-    fuentes: list[str],
-) -> str:
-    partes = [
-        f"Evaluación de {tipo_evaluacion} para {cultivo}.",
-        f"Clima consolidado desde: {', '.join(fuentes)}.",
-        (
-            f"Condiciones actuales: {condiciones.get('temperatura_c')}°C, "
-            f"humedad {condiciones.get('humedad_pct')}%, "
-            f"viento {condiciones.get('viento_kmh')} km/h, "
-            f"prob. lluvia {condiciones.get('prob_lluvia_pct')}%."
-        ),
-    ]
-    if condiciones.get("temp_suelo_c") is not None:
-        partes.append(
-            f"Suelo: {condiciones.get('temp_suelo_c')}°C, "
-            f"humedad {condiciones.get('humedad_suelo_pct')}%."
-        )
-    if advertencias:
-        partes.append(f"Advertencias ({len(advertencias)}): " + "; ".join(a["mensaje"] for a in advertencias))
-    else:
-        partes.append("No se detectaron advertencias críticas según umbrales agronómicos.")
-    return " ".join(partes)

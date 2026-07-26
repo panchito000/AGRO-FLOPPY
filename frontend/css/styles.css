@@ -703,6 +703,16 @@ body.map-modal-open {
   word-break: break-word;
 }
 
+.result-highlight p,
+.result-bullet {
+  margin-bottom: 0.5rem;
+}
+
+.result-bullet {
+  padding-left: 0.25rem;
+  color: var(--color-gray-700);
+}
+
 /* Footer */
 .footer {
   margin-top: auto;
