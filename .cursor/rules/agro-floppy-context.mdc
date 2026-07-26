@@ -1,0 +1,33 @@
+---
+description: Contexto del proyecto AGRO-FLOPPY (Zafra AI) — MVP agrícola
+alwaysApply: true
+---
+
+# AGRO-FLOPPY / Zafra AI
+
+Copiloto web para agrónomos (soya/maíz). MVP con estructura completa; **sin IA ni APIs externas conectadas aún**.
+
+Lee `AGENTS.md` en la raíz para contexto completo (historial, pendientes, URLs).
+
+## Claves rápidas
+
+- **Repo:** `panchito000/AGRO-FLOPPY` | **Prod:** https://agro-floppy.vercel.app
+- **Supabase ref:** `skxgdeogffuaafkdynyk` (BD vacía, aplicar `database/schema.sql`)
+- **Backend:** `backend/` FastAPI | **Frontend:** `frontend/` + copia en `public/` (Vercel sirve `public/`)
+- **Deploy:** `vercel deploy --prod --yes` (manual; cuentas GitHub/Vercel distintas)
+
+## No reimplementar
+
+Mapa Leaflet, 14 fincas demo Santa Cruz, formulario audio/texto, `POST /evaluar`, gateway `api/index.py`, Supabase MCP en `.cursor/`.
+
+## Prioridad actual
+
+1. Schema SQL en Supabase
+2. Env vars en Vercel (`DATABASE_URL`, `SUPABASE_*`)
+3. Persistir evaluaciones en BD
+4. Sincronizar `frontend/` ↔ `public/`
+5. OpenWeather → tarjeta Clima
+
+## Arquitectura
+
+`routes` → `services` → `models`. Audio en `/tmp` (Vercel) o `backend/uploads/` (local). Ver `docs/README_AGRONOMIA.md` para reglas agronómicas.

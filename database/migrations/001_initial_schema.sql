@@ -1,7 +1,6 @@
--- AGRO-FLOPPY (Zafra AI) — Esquema inicial auditado (v2)
--- Fuente canónica: database/migrations/001_initial_schema.sql
+-- AGRO-FLOPPY (Zafra AI) — Esquema inicial auditado
 -- Supabase project: skxgdeogffuaafkdynyk
--- Ver auditoría: database/AUDITORIA.md
+-- Aplicar en: SQL Editor de Supabase o via scripts/apply_schema.py
 
 BEGIN;
 
