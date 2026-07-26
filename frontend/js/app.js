@@ -239,6 +239,14 @@ function initAudioRecorder() {
       showToast(message, true);
     },
   });
+
+  if (!ZafraAudioRecorder.isSpeechSupported()) {
+    updateDictationBadge(
+      false,
+      "unsupported",
+      "Usá Chrome o Edge para dictado en vivo. También podés escribir en Notas."
+    );
+  }
 }
 
 function startRecording() {
