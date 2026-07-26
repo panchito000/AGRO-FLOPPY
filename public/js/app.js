@@ -286,8 +286,15 @@ function renderAdvertencias(advertencias) {
 }
 
 async function enviarEvaluacion(formData) {
+  const headers = {};
+  if (window.ZafraAuth?.getAccessToken) {
+    const token = await window.ZafraAuth.getAccessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE_URL}/evaluar`, {
     method: "POST",
+    headers,
     body: formData,
   });
 
