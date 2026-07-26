@@ -98,6 +98,7 @@ def procesar_evaluacion(
         lon=datos.longitud,
         ubicacion_nombre=datos.ubicacion,
         texto=texto,
+        db=db,
     )
 
     clima_completo = agronomia.get("clima_completo")
@@ -128,6 +129,7 @@ def procesar_evaluacion(
         recomendacion=agronomia.get("recomendacion"),
         explicacion=agronomia.get("explicacion"),
         fuentes_usadas=agronomia.get("fuentes_usadas", []),
+        fuentes_conocimiento=agronomia.get("fuentes_conocimiento", []),
         producto_evaluado=agronomia.get("producto_evaluado"),
     )
 

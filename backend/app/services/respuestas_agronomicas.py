@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 
 from app.data.conocimiento_agronomico import COSECHA, FERTILIZACION, RIEGO, SIEMBRA
 from app.data.plagas_zona import PLAGAS_POR_CULTIVO, ZONAS_SANTA_CRUZ
 from app.services.clima.datos_agronomicos import PRODUCTOS, buscar_producto
+from app.services.conocimiento_service import FragmentoConocimiento
 
 TIPOS_EVALUACION = {
     "siembra": "siembra",
@@ -100,6 +102,60 @@ def _bloque_advertencias(advertencias: list[dict]) -> list[str]:
     if not advertencias:
         return ["• No hay alertas críticas según los umbrales configurados."]
     return [f"• {a['mensaje']}" for a in advertencias[:4]]
+
+
+def _recortar(texto: str, max_len: int = 240) -> str:
+    texto = " ".join(texto.split())
+    if len(texto) <= max_len:
+        return texto
+    corto = texto[:max_len].rsplit(" ", 1)[0]
+    return corto + "…"
+
+
+def _bloque_kb(fragmentos: list[FragmentoConocimiento]) -> str:
+    if not fragmentos:
+        return ""
+    lineas = ["\n\nDe nuestra base documental:"]
+    for fr in fragmentos[:2]:
+        txt = fr.contenido
+        if txt.startswith("{"):
+            try:
+                data = json.loads(txt)
+                if isinstance(data, dict):
+                    partes = []
+                    for k, v in list(data.items())[:3]:
+                        if isinstance(v, list):
+                            v = ", ".join(str(x) for x in v[:3])
+                        partes.append(f"{k}: {v}")
+                    txt = "; ".join(partes)
+            except json.JSONDecodeError:
+                pass
+        lineas.append(f"• {_recortar(txt, 200)}")
+    return "\n".join(lineas)
+
+
+def _pie_fuentes(fuentes: list[str]) -> str:
+    if not fuentes:
+        return ""
+    return "\n\nFuentes consultadas:\n" + "\n".join(f"• {f}" for f in fuentes[:5])
+
+
+def _finalizar(
+    rec: str,
+    exp: str,
+    fragmentos: list[FragmentoConocimiento],
+    fuentes: list[str],
+) -> tuple[str, str]:
+    rec = _recortar(rec, 260)
+    if fragmentos and fuentes:
+        doc_fuente = next((f for f in fuentes if "clima" not in f.lower()), None)
+        if doc_fuente and doc_fuente not in rec:
+            rec = _recortar(f"{rec} (Ref: {_recortar(doc_fuente, 80)})", 300)
+    if _bloque_kb(fragmentos) not in exp:
+        exp += _bloque_kb(fragmentos)
+    if _pie_fuentes(fuentes) not in exp:
+        exp += _pie_fuentes(fuentes)
+    return rec, exp
 
 
 def _ventana_sugerida(semaforo: str, condiciones: dict, *, accion: str = "avanzar") -> str:
@@ -197,10 +253,7 @@ def _responder_siembra(
         )
     else:
         principal = advertencias[0]["mensaje"] if advertencias else "condiciones desfavorables"
-        recomendacion = (
-            f"Por ahora no conviene sembrar {nombre}. {principal} "
-            + _ventana_sugerida(semaforo, condiciones, accion="sembrar")
-        )
+        recomendacion = f"Por ahora no conviene sembrar {nombre}. {principal}"
 
     intro = (
         f"Revisé las condiciones de siembra para {nombre} en {zona}."
@@ -464,28 +517,30 @@ def generar_respuestas(
     texto: str | None = None,
     producto: str | None = None,
     intencion: str | None = None,
+    fragmentos: list[FragmentoConocimiento] | None = None,
+    fuentes_conocimiento: list[str] | None = None,
 ) -> tuple[str, str]:
     """Devuelve (recomendacion, explicacion) según tipo e intención del usuario."""
     if intencion is None:
         intencion = detectar_intencion(texto, tipo_evaluacion)
 
+    frags = fragmentos or []
+    cites = fuentes_conocimiento or []
+
     if intencion == "consulta_plagas_zona":
-        return _responder_plagas_zona(cultivo, ubicacion, condiciones)
+        rec, exp = _responder_plagas_zona(cultivo, ubicacion, condiciones)
+        return _finalizar(rec, exp, frags, cites)
 
     if tipo_evaluacion == "siembra":
-        return _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
-
-    if tipo_evaluacion == "riego":
-        return _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
-
-    if tipo_evaluacion == "fertilizacion":
-        return _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
-
-    if tipo_evaluacion == "cosecha":
-        return _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
-
-    if tipo_evaluacion == "plagas":
-        return _responder_fumigacion(
+        rec, exp = _responder_siembra(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    elif tipo_evaluacion == "riego":
+        rec, exp = _responder_riego(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    elif tipo_evaluacion == "fertilizacion":
+        rec, exp = _responder_fertilizacion(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    elif tipo_evaluacion == "cosecha":
+        rec, exp = _responder_cosecha(cultivo, semaforo, condiciones, advertencias, ubicacion, texto)
+    elif tipo_evaluacion == "plagas":
+        rec, exp = _responder_fumigacion(
             cultivo=cultivo,
             semaforo=semaforo,
             condiciones=condiciones,
@@ -494,25 +549,19 @@ def generar_respuestas(
             ubicacion=ubicacion,
             texto=texto,
         )
-
-    # Fallback genérico
-    nombre = _nombre_cultivo(cultivo)
-    accion = {"siembra": "sembrar", "fertilizacion": "fertilizar", "riego": "regar", "cosecha": "cosechar"}.get(
-        tipo_evaluacion, tipo_evaluacion
-    )
-    if semaforo == "verde":
-        rec = f"Sí podés {accion} {nombre} en las condiciones actuales."
-    elif semaforo == "amarillo":
-        rec = f"Podés {accion} {nombre} con precaución. " + _ventana_sugerida(semaforo, condiciones, accion=accion)
     else:
-        rec = f"Mejor esperar para {accion} {nombre}. " + _ventana_sugerida(semaforo, condiciones, accion=accion)
+        nombre = _nombre_cultivo(cultivo)
+        accion = tipo_evaluacion
+        if semaforo == "verde":
+            rec = f"Sí podés {accion} {nombre} en las condiciones actuales."
+        elif semaforo == "amarillo":
+            rec = f"Podés {accion} {nombre} con precaución."
+        else:
+            rec = f"Mejor esperar para {accion} {nombre}."
+        hora = datetime.now().strftime("%H:%M")
+        exp = (
+            f"Consulta de {TIPOS_EVALUACION.get(tipo_evaluacion, tipo_evaluacion)} "
+            f"({hora}).\n\nClima:\n" + "\n".join(_bloque_clima(condiciones))
+        )
 
-    hora = datetime.now().strftime("%H:%M")
-    exp = (
-        f"Consulta de {TIPOS_EVALUACION.get(tipo_evaluacion, tipo_evaluacion)} "
-        f"para {nombre} ({hora}).\n\n"
-        f"Clima:\n"
-        + "\n".join(_bloque_clima(condiciones))
-        + f"\n\nFuentes: {', '.join(fuentes) if fuentes else 'sin fuentes'}."
-    )
-    return rec, exp
+    return _finalizar(rec, exp, frags, cites)

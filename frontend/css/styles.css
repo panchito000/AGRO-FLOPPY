@@ -713,6 +713,23 @@ body.map-modal-open {
   color: var(--color-gray-700);
 }
 
+.fuentes-box {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-gray-200);
+}
+
+.fuentes-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.8125rem;
+  color: var(--color-gray-600);
+}
+
+.fuentes-list li {
+  margin-bottom: 0.25rem;
+}
+
 /* Footer */
 .footer {
   margin-top: auto;

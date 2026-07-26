@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID as PGUUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database.connection import Base
@@ -144,3 +144,40 @@ class ClimaCache(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class Documento(Base):
+    __tablename__ = "documentos"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    slug: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
+    titulo: Mapped[str] = mapped_column(String(255), nullable=False)
+    tipo: Mapped[str] = mapped_column(String(40), nullable=False)
+    ruta_origen: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    descripcion: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    chunks: Mapped[list["DocumentoChunk"]] = relationship(back_populates="documento")
+
+
+class DocumentoChunk(Base):
+    __tablename__ = "documento_chunks"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    documento_id: Mapped[int] = mapped_column(ForeignKey("documentos.id"), nullable=False)
+    cultivo: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    tipo_evaluacion: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    etiquetas: Mapped[list[str] | None] = mapped_column(ARRAY(Text), nullable=True)
+    contenido: Mapped[str] = mapped_column(Text, nullable=False)
+    fuente_cita: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    metadata_: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    documento: Mapped["Documento"] = relationship(back_populates="chunks")

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from app.data.ubicaciones import UBICACIONES
 from app.services.clima import foreca, openmeteo, wttr
@@ -12,7 +13,11 @@ from app.services.clima.datos_agronomicos import (
     evaluar_fumigacion,
     evaluar_siembra,
 )
+from app.services.conocimiento_service import buscar_conocimiento, formatear_fuentes, fuentes_clima
 from app.services.respuestas_agronomicas import detectar_intencion, generar_respuestas
+
+if TYPE_CHECKING:
+    from sqlalchemy.orm import Session
 
 
 def _promedio(valores: list[float]) -> float | None:
@@ -246,6 +251,7 @@ def evaluar_agronomico(
     lon: float,
     ubicacion_nombre: str | None = None,
     texto: str | None = None,
+    db: Session | None = None,
 ) -> dict:
     """Combina clima en vivo con reglas agronómicas de Saul."""
     clima = obtener_clima_consolidado(lat, lon)
@@ -306,6 +312,18 @@ def evaluar_agronomico(
     else:
         _aplicar_evaluacion(resultado, evaluar_siembra(cultivo, condiciones), error_tipo="cultivo")
 
+    fragmentos = buscar_conocimiento(
+        cultivo=cultivo,
+        tipo_evaluacion=tipo_evaluacion,
+        texto=texto,
+        db=db,
+        limit=3,
+    )
+    fuentes_info = formatear_fuentes(
+        fuentes_clima_list=fuentes_clima(clima["fuentes_usadas"]),
+        fragmentos=fragmentos,
+    )
+
     resultado["recomendacion"], resultado["explicacion"] = generar_respuestas(
         cultivo=cultivo,
         tipo_evaluacion=tipo_evaluacion,
@@ -318,6 +336,9 @@ def evaluar_agronomico(
         texto=texto,
         producto=resultado.get("producto_evaluado") or producto,
         intencion=resultado.get("intencion_detectada"),
+        fragmentos=fragmentos,
+        fuentes_conocimiento=fuentes_info,
     )
+    resultado["fuentes_conocimiento"] = fuentes_info
     resultado["clima_completo"] = clima
     return resultado

@@ -47,4 +47,5 @@ class EvaluacionResponse(BaseModel):
     recomendacion: str | None = None
     explicacion: str | None = None
     fuentes_usadas: list[str] = Field(default_factory=list)
+    fuentes_conocimiento: list[str] = Field(default_factory=list)
     producto_evaluado: str | None = None

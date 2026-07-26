@@ -188,6 +188,20 @@ function formatTextoHumano(texto) {
     .join("");
 }
 
+function renderFuentes(fuentes) {
+  if (!fuentes || fuentes.length === 0) {
+    return "";
+  }
+  return `
+    <div class="fuentes-box">
+      <p class="result-meta"><strong>Fuentes consultadas</strong></p>
+      <ul class="fuentes-list">
+        ${fuentes.map((f) => `<li>${f}</li>`).join("")}
+      </ul>
+    </div>
+  `;
+}
+
 function showResults(data) {
   const semaforo = data.semaforo || "amarillo";
   const semaforoLabels = { verde: "Favorable", amarillo: "Precaución", rojo: "No recomendado" };
@@ -197,7 +211,9 @@ function showResults(data) {
   resultCards.explicacion.classList.add("is-active");
 
   const cond = data.condiciones_actuales || {};
-  const fuentes = (data.fuentes_usadas || []).join(", ") || "—";
+  const fuentes = (data.fuentes_conocimiento && data.fuentes_conocimiento.length)
+    ? data.fuentes_conocimiento.join("; ")
+    : ((data.fuentes_usadas || []).join(", ") || "—");
 
   resultContents.clima.hidden = false;
   const climaCard = resultCards.clima;
@@ -230,6 +246,7 @@ function showResults(data) {
     <p><strong>Ubicación:</strong> ${data.ubicacion}</p>
     ${data.producto_evaluado ? `<p><strong>Producto:</strong> ${data.producto_evaluado}</p>` : ""}
     <div class="result-highlight">${formatTextoHumano(data.recomendacion) || "<p>Sin recomendación disponible.</p>"}</div>
+    ${renderFuentes(data.fuentes_conocimiento)}
     ${data.evaluacion_id ? `<p class="result-meta">ID evaluación: ${data.evaluacion_id}</p>` : ""}
   `;
 
