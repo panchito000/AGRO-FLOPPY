@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     """Variables de entorno cargadas desde .env."""
 
     model_config = SettingsConfigDict(
-        env_file=(ROOT_DIR / ".env", BACKEND_DIR / ".env"),
+        env_file=(ROOT_DIR / ".env", ROOT_DIR / ".env.local", BACKEND_DIR / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )

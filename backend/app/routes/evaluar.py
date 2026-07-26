@@ -1,7 +1,9 @@
 """Rutas de evaluación agronómica."""
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from sqlalchemy.orm import Session
 
+from app.database.connection import get_db
 from app.models.schemas import CultivoEnum, EvaluacionRequest, EvaluacionResponse, TipoEvaluacionEnum
 from app.services.evaluacion_service import procesar_evaluacion
 
@@ -17,8 +19,9 @@ async def evaluar(
     longitud: float | None = Form(default=None),
     texto: str | None = Form(default=None, max_length=5000),
     audio: UploadFile | None = File(default=None),
+    db: Session = Depends(get_db),
 ):
-    """Recibe datos del formulario con texto y/o audio opcionales."""
+    """Recibe datos del formulario, consulta clima y evalúa reglas agronómicas."""
     texto_limpio = texto.strip() if texto else None
 
     if not texto_limpio and (not audio or not audio.filename):
@@ -43,6 +46,6 @@ async def evaluar(
     )
 
     try:
-        return procesar_evaluacion(datos, audio=audio)
+        return procesar_evaluacion(datos, audio=audio, db=db)
     except ValueError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

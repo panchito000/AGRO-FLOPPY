@@ -12,8 +12,14 @@ SCHEMA = ROOT / "database" / "schema.sql"
 
 
 def load_database_url() -> str:
-    env_path = ROOT / ".env"
-    if env_path.exists():
+    env_files = (
+        ROOT / ".env",
+        ROOT / ".env.local",
+        ROOT / "backend" / ".env",
+    )
+    for env_path in env_files:
+        if not env_path.exists():
+            continue
         for line in env_path.read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if line.startswith("DATABASE_URL="):

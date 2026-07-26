@@ -5,3 +5,4 @@ psycopg2-binary>=2.9.10
 pydantic-settings>=2.6.0
 python-dotenv>=1.0.1
 python-multipart>=0.0.12
+requests>=2.31.0

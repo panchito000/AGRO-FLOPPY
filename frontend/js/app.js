@@ -76,10 +76,14 @@ function formatBytes(bytes) {
 }
 
 function resetResults() {
-  Object.values(resultCards).forEach((card) => card.classList.remove("is-active"));
+  Object.values(resultCards).forEach((card) => {
+    card.classList.remove("is-active");
+    const placeholder = card.querySelector(".card__placeholder");
+    if (placeholder) placeholder.hidden = false;
+  });
   Object.values(resultContents).forEach((content) => {
     content.hidden = true;
-    content.textContent = "";
+    content.innerHTML = "";
   });
 }
 
@@ -165,30 +169,73 @@ function stopRecording() {
   btnDetener.disabled = true;
 }
 
-function showPlaceholderResults(data) {
+function showResults(data) {
+  const semaforo = data.semaforo || "amarillo";
+  const semaforoLabels = { verde: "Favorable", amarillo: "Precaución", rojo: "No recomendado" };
+
+  resultCards.clima.classList.add("is-active");
   resultCards.recomendacion.classList.add("is-active");
+  resultCards.explicacion.classList.add("is-active");
+
+  const cond = data.condiciones_actuales || {};
+  const fuentes = (data.fuentes_usadas || []).join(", ") || "—";
+
+  resultContents.clima.hidden = false;
+  const climaCard = resultCards.clima;
+  const climaPlaceholder = climaCard.querySelector(".card__placeholder");
+  if (climaPlaceholder) climaPlaceholder.hidden = true;
+  resultContents.clima.innerHTML = `
+    <div class="semaforo semaforo--${semaforo}">
+      <span class="semaforo__dot" aria-hidden="true"></span>
+      <strong>${semaforoLabels[semaforo] || semaforo}</strong>
+      ${data.veredicto ? `<span class="semaforo__veredicto">${data.veredicto}</span>` : ""}
+    </div>
+    <ul class="clima-list">
+      <li><strong>Temperatura:</strong> ${cond.temperatura_c ?? "—"}°C</li>
+      <li><strong>Humedad:</strong> ${cond.humedad_pct ?? "—"}%</li>
+      <li><strong>Viento:</strong> ${cond.viento_kmh ?? "—"} km/h</li>
+      <li><strong>Prob. lluvia:</strong> ${cond.prob_lluvia_pct ?? "—"}%</li>
+      <li><strong>Temp. suelo:</strong> ${cond.temp_suelo_c ?? "—"}°C</li>
+      <li><strong>Humedad suelo:</strong> ${cond.humedad_suelo_pct ?? "—"}%</li>
+    </ul>
+    <p class="result-meta"><strong>Fuentes:</strong> ${fuentes}</p>
+    ${renderAdvertencias(data.advertencias)}
+  `;
+
   resultContents.recomendacion.hidden = false;
-
-  const textoHtml = data.texto
-    ? `<p><strong>Texto:</strong> ${data.texto}</p>`
-    : `<p><strong>Texto:</strong> <em>Sin notas escritas</em></p>`;
-
-  const audioHtml = data.audio_recibido
-    ? `<p><strong>Audio:</strong> ${data.audio_nombre} (${formatBytes(data.audio_tamano_bytes)})</p>`
-    : `<p><strong>Audio:</strong> <em>No enviado</em></p>`;
-
-  const coordsHtml = data.latitud != null && data.longitud != null
-    ? `<p><strong>Coordenadas:</strong> ${data.latitud.toFixed(6)}, ${data.longitud.toFixed(6)}</p>`
-    : "";
-
+  const recPlaceholder = resultCards.recomendacion.querySelector(".card__placeholder");
+  if (recPlaceholder) recPlaceholder.hidden = true;
   resultContents.recomendacion.innerHTML = `
     <p><strong>Cultivo:</strong> ${formatCultivo(data.cultivo)}</p>
     <p><strong>Evaluación:</strong> ${formatTipo(data.tipo_evaluacion)}</p>
     <p><strong>Ubicación:</strong> ${data.ubicacion}</p>
-    ${coordsHtml}
-    ${textoHtml}
-    ${audioHtml}
-    <p style="margin-top:0.75rem;color:var(--color-gray-500)">${data.mensaje}</p>
+    ${data.producto_evaluado ? `<p><strong>Producto:</strong> ${data.producto_evaluado}</p>` : ""}
+    <p class="result-highlight">${data.recomendacion || "Sin recomendación disponible."}</p>
+    ${data.evaluacion_id ? `<p class="result-meta">ID evaluación: ${data.evaluacion_id}</p>` : ""}
+  `;
+
+  resultContents.explicacion.hidden = false;
+  const expPlaceholder = resultCards.explicacion.querySelector(".card__placeholder");
+  if (expPlaceholder) expPlaceholder.hidden = true;
+  resultContents.explicacion.innerHTML = `
+    <p>${data.explicacion || data.mensaje || "Sin explicación disponible."}</p>
+    ${data.texto ? `<p class="result-meta"><strong>Notas:</strong> ${data.texto}</p>` : ""}
+    ${data.audio_recibido ? `<p class="result-meta"><strong>Audio:</strong> ${data.audio_nombre}</p>` : ""}
+  `;
+}
+
+function renderAdvertencias(advertencias) {
+  if (!advertencias || advertencias.length === 0) {
+    return `<p class="result-meta">Sin advertencias.</p>`;
+  }
+  return `
+    <ul class="advertencias-list">
+      ${advertencias.map((item) => `
+        <li class="advertencia-item advertencia-item--${item.severidad || "media"}">
+          ${item.mensaje}
+        </li>
+      `).join("")}
+    </ul>
   `;
 }
 
@@ -271,7 +318,7 @@ form.addEventListener("submit", async (event) => {
 
   try {
     const data = await enviarEvaluacion(formData);
-    showPlaceholderResults(data);
+    showResults(data);
     showToast("Evaluación enviada correctamente.");
   } catch (error) {
     showToast(error.message, true);

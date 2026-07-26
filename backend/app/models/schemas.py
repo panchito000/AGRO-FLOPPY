@@ -1,6 +1,7 @@
 """Esquemas Pydantic para validación de requests/responses."""
 
 from enum import Enum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -37,4 +38,13 @@ class EvaluacionResponse(BaseModel):
     audio_recibido: bool = False
     audio_nombre: str | None = None
     audio_tamano_bytes: int | None = None
-    mensaje: str = "Datos recibidos correctamente. Lógica de evaluación pendiente."
+    mensaje: str = "Evaluación procesada correctamente."
+    evaluacion_id: int | None = None
+    veredicto: str | None = None
+    semaforo: str | None = None
+    condiciones_actuales: dict[str, Any] | None = None
+    advertencias: list[dict[str, Any]] = Field(default_factory=list)
+    recomendacion: str | None = None
+    explicacion: str | None = None
+    fuentes_usadas: list[str] = Field(default_factory=list)
+    producto_evaluado: str | None = None
