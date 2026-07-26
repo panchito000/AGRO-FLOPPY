@@ -1,14 +1,14 @@
-# AGRO-FLOPPY (Zafra AI)
+# AGRO-FLOPPY 
 
 Copiloto inteligente para ingenieros agrónomos, administradores agrícolas y productores tecnificados. Analiza cultivos de **soya** y **maíz** en Santa Cruz, Bolivia usando información meteorológica de múltiples fuentes, reglas agronómicas validadas e IA (pendiente).
 
 | Recurso | URL |
 |---------|-----|
 | **GitHub** | https://github.com/panchito000/AGRO-FLOPPY |
-| **Producción** | https://agro-floppy.vercel.app |
+| **Producción** | agro-floppy-lilac.vercel.app|
 | **API health** | https://agro-floppy.vercel.app/api/ |
 | **Swagger** | https://agro-floppy.vercel.app/api/docs |
-| **Supabase** | https://skxgdeogffuaafkdynyk.supabase.co |
+| **Supabase** |https://supabase.com/dashboard/project/skxgdeogffuaafkdynyk |
 
 ---
 
